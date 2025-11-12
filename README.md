@@ -1,458 +1,325 @@
-# 🤖 AI Code Review Assistant
+# 🧠 Codebase Intelligence
 
-> **Production-ready code review system using RAG (Retrieval Augmented Generation) and Claude AI**
+> **Graph-powered code analysis that goes beyond traditional linting**
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
-[![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://www.docker.com/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-latest-green.svg)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18-blue.svg)](https://reactjs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-An intelligent code review assistant that combines vector embeddings, semantic search, and large language models to provide comprehensive, context-aware code reviews. Built with modern MLOps practices and production-ready infrastructure.
+An intelligent code review system that combines **static graph analysis** (DFS, BFS, call graphs) with **GPT-4** to provide comprehensive, evidence-based code reviews. Goes beyond syntax checking to analyze circular dependencies, dead code, function impact, and architectural patterns.
 
 ---
 
-## 🎯 Key Features
+## ✨ Key Features
 
-### 🧠 **Advanced AI Analysis**
-- **RAG-powered reviews** using semantic similarity search
-- **Claude AI integration** for intelligent feedback
-- **AST-based code structure analysis**
-- **Multi-language support** (Python initially, extensible)
+### 🔍 **Graph-Based Static Analysis**
+- **Circular dependency detection** using depth-first search
+- **Dead code identification** through call graph analysis
+- **Impact analysis** with breadth-first traversal
+- **Function complexity** calculation (cyclomatic complexity)
+- **Type hint coverage** tracking
+
+### 🤖 **AI-Powered Insights**
+- **GPT-4 integration** for synthesized recommendations
+- **RAG-enhanced reviews** using ChromaDB vector database
+- **Context-aware suggestions** based on codebase patterns
+- **Prioritized issue reporting** (Critical → Warning → Suggestion)
 
 ### 📊 **Comprehensive Metrics**
-- Code quality scoring (1-10)
-- Issue categorization (security, performance, style, bugs)
-- Severity levels (critical, warning, suggestion)
-- Complexity analysis and line-by-line feedback
+- Function-level impact scores
+- Dependency graph visualization data
+- Code quality scoring (1-10 scale)
+- Issue categorization and severity levels
+- Detailed evidence for each finding
 
 ### 🚀 **Production Ready**
-- **REST API** with FastAPI
-- **CLI tool** for local development
-- **Docker containerization**
-- **Persistent vector database** (ChromaDB)
-- **Health checks** and monitoring endpoints
-
-### 💾 **Knowledge Management**
-- Customizable best practices database
-- Common issues tracking
-- Continuous learning from custom patterns
-- Domain-specific adaptations
+- Full-stack web interface (React + FastAPI)
+- REST API for CI/CD integration
+- Batch repository analysis
+- Export reports (JSON format)
 
 ---
 
 ## 🏗️ Architecture
-
 ```
-┌─────────────┐
-│   User      │
-│  (Code)     │
-└──────┬──────┘
-       │
-       ├──────> CLI Tool
-       │
-       └──────> REST API (FastAPI)
-                     │
-       ┌─────────────┴─────────────┐
-       │                           │
-       v                           v
-┌──────────────┐          ┌──────────────┐
-│   Embedding  │          │   Claude AI  │
-│    Model     │          │   (LLM)      │
-│ (MiniLM-L6)  │          │              │
-└──────┬───────┘          └──────┬───────┘
-       │                         │
-       v                         v
-┌──────────────┐          ┌──────────────┐
-│   ChromaDB   │<────────>│    Review    │
-│  (Vector DB) │          │   Engine     │
-└──────────────┘          └──────────────┘
-       │                         │
-       │                         v
-       │                  ┌─────────────┐
-       └─────────────────>│   Output    │
-                          │  (Formatted │
-                          │   Report)   │
-                          └─────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                    Repository Input                       │
+└────────────────────────┬─────────────────────────────────┘
+                         │
+                         v
+┌──────────────────────────────────────────────────────────┐
+│              Codebase Analyzer (Graph Builder)           │
+│  • Parse AST for all Python files                        │
+│  • Build dependency graph (file-level)                   │
+│  • Build call graph (function-level)                     │
+│  • Calculate complexity metrics                          │
+└────────────────────────┬─────────────────────────────────┘
+                         │
+                         v
+┌──────────────────────────────────────────────────────────┐
+│              Static Analysis Engine                       │
+│  • DFS for circular dependencies                         │
+│  • Call graph for dead code detection                    │
+│  • BFS for impact analysis                               │
+│  • Type hint validation                                  │
+└────────────────────────┬─────────────────────────────────┘
+                         │
+                         v
+┌──────────────────────────────────────────────────────────┐
+│                   GPT Review Layer                        │
+│  • RAG with ChromaDB (best practices)                    │
+│  • GPT-4 synthesis & prioritization                      │
+│  • Root cause analysis                                   │
+└────────────────────────┬─────────────────────────────────┘
+                         │
+                         v
+┌──────────────────────────────────────────────────────────┐
+│                   Structured Output                       │
+│  • JSON report with evidence                             │
+│  • Severity-based grouping                               │
+│  • Actionable recommendations                            │
+└──────────────────────────────────────────────────────────┘
 ```
 
-### **Tech Stack:**
-- **Embeddings:** Sentence-Transformers (all-MiniLM-L6-v2)
-- **Vector Database:** ChromaDB with DuckDB backend
-- **LLM:** Anthropic Claude Sonnet 4
-- **API Framework:** FastAPI
-- **Containerization:** Docker + Docker Compose
-- **Testing:** Pytest with async support
+**Tech Stack:**
+- **Backend:** Python 3.11, FastAPI, AST parsing
+- **Frontend:** React 18, Axios
+- **AI/ML:** OpenAI GPT-4, ChromaDB (RAG), Sentence Transformers
+- **Analysis:** NetworkX-style graph algorithms (DFS/BFS)
 
 ---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.11+
-- Anthropic API key ([Get one here](https://console.anthropic.com/))
-- Docker (optional, for containerized deployment)
+- **Python 3.11+**
+- **Node.js 18+** and npm
+- **OpenAI API key** ([Get one here](https://platform.openai.com/api-keys))
 
 ### Installation
-
-#### Option 1: Local Setup
 ```bash
-# Clone repository
-git clone https://github.com/yourusername/ai-code-reviewer.git
-cd ai-code-reviewer
+# 1. Clone repository
+git clone git@github.com:Oussamcsc/codebase-intelligence.git
+cd codebase-intelligence
 
-# Create virtual environment
+# 2. Backend setup
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-# Set up environment variables
+# 3. Configure API key
 cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY
-```
+# Edit .env and add: OPENAI_API_KEY=sk-your-key-here
 
-#### Option 2: Docker Setup
-```bash
-# Clone and navigate to repo
-git clone https://github.com/yourusername/ai-code-reviewer.git
-cd ai-code-reviewer
+# 4. Start backend
+python api.py
+# API runs at http://localhost:8000
 
-# Set environment variable
-export ANTHROPIC_API_KEY="your-key-here"
-
-# Build and run
-docker-compose up -d
-```
-
-### Initialize Knowledge Base
-```bash
-# Using CLI
-python cli.py init
-
-# Or via API (if running)
-curl -X POST http://localhost:8000/best-practices \
-  -H "Content-Type: application/json" \
-  -d '{"practice": "Always use type hints", "category": "typing"}'
+# 5. Frontend setup (new terminal)
+cd web
+npm install
+npm start
+# UI opens at http://localhost:3000
 ```
 
 ---
 
 ## 💻 Usage
 
-### CLI Tool
+### Web Interface
 
-#### Basic Review
-```bash
-# Review a file
-python cli.py review my_code.py
+1. **Open** `http://localhost:3000`
+2. **Paste** GitHub repository URL (e.g., `https://github.com/psf/requests`)
+3. **Click** "Analyze Repository"
+4. **Wait** 5-15 minutes (depends on repo size)
+5. **Review** results with expandable issues grouped by severity
 
-# Review with context
-python cli.py review app.py --context "Flask API endpoint for user authentication"
-
-# Review from stdin
-cat my_code.py | python cli.py review -
-
-# Output to file
-python cli.py review code.py --output review.txt
-
-# JSON output
-python cli.py review code.py --format json
-```
-
-#### Knowledge Base Management
-```bash
-# Add best practice
-python cli.py add-practice "Use context managers for file handling" --category resources
-
-# Add common issue
-python cli.py add-issue "SQL injection via string concatenation" --category security
-
-# View statistics
-python cli.py stats
-```
-
-### REST API
-
-#### Start Server
-```bash
-# Local development
-uvicorn api:app --reload --port 8000
-
-# Production
-uvicorn api:app --host 0.0.0.0 --port 8000 --workers 4
-```
-
-#### API Endpoints
+### API Endpoints
 
 **Health Check**
 ```bash
 curl http://localhost:8000/health
 ```
 
-**Review Code**
+**Analyze Repository**
 ```bash
-curl -X POST http://localhost:8000/review \
+curl -X POST http://localhost:8000/analyze \
   -H "Content-Type: application/json" \
   -d '{
-    "code": "def calculate(x):\n    return x/0",
-    "language": "python",
-    "context": "Division function"
+    "repository_url": "https://github.com/psf/requests",
+    "branch": "main"
   }'
 ```
 
-**Get Statistics**
-```bash
-curl http://localhost:8000/stats
-```
-
-**Add Best Practice**
-```bash
-curl -X POST http://localhost:8000/best-practices \
-  -H "Content-Type: application/json" \
-  -d '{
-    "practice": "Validate all user inputs",
-    "category": "security"
-  }'
-```
-
-### Python SDK Usage
-
-```python
-from Enhanced_code_review_assistant import CodeReviewAssistant, format_review_output
-import os
-
-# Initialize
-api_key = os.getenv("ANTHROPIC_API_KEY")
-assistant = CodeReviewAssistant(api_key)
-
-# Initialize knowledge base
-assistant.initialize_knowledge_base()
-
-# Review code
-code = """
-def process_data(data):
-    result = []
-    for item in data:
-        if item > 0:
-            result.append(item * 2)
-    return result
-"""
-
-review = assistant.review_code(
-    code=code,
-    language="python", 
-    file_path="example.py",
-    context="Example code review"
-)
-print(format_review_output(review))
-
-# Add custom best practices
-assistant.add_best_practice(
-    "Always close database connections",
-    "resources"
-)
+**Response:**
+```json
+{
+  "repository": "https://github.com/psf/requests",
+  "branch": "main",
+  "files_analyzed": 29,
+  "total_issues": 210,
+  "results": [
+    {
+      "file_path": "src/requests/sessions.py",
+      "review": {
+        "overall_quality": "6",
+        "summary": "High complexity functions detected...",
+        "critical_findings": {
+          "correctness_issues": 0,
+          "stability_risks": 2,
+          "performance_problems": 1,
+          "maintainability_debt": 4
+        },
+        "issues": [
+          {
+            "issue_type": "Critical",
+            "location": "Line 159",
+            "bug_risk": "Circular dependency detected",
+            "evidence": {
+              "cycle": ["sessions.py", "cookies.py", "compat.py"],
+              "detection_method": "DFS_on_dependency_graph"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
 ```
 
 ---
 
-## 📊 Example Output
+## 📊 Example Analysis
 
-```
-================================================================================
-CODE REVIEW REPORT
-================================================================================
+**Tested on:** Python `requests` library (29 files, ~10K LOC)
 
-Overall Quality Score: 6/10
-Summary: Code is functional but lacks documentation and has performance issues
+**Results:**
+- ✅ **210 issues found** in ~15 minutes
+- 🔴 **3 critical issues** (circular dependencies, security risks)
+- ⚠️ **45 warnings** (dead code, high complexity, unused imports)
+- 💡 **162 suggestions** (missing type hints, documentation)
 
-Context Used: 5 relevant items from knowledge base
-
-================================================================================
-ISSUES FOUND
-================================================================================
-
-🟡 Issue #1 [WARNING]
-Category: performance
-Line: 4
-Problem: Using manual loop instead of built-in functions
-Fix: Replace manual loop with list comprehension: return [item * 2 for item in data if item > 0]
-
-🔵 Issue #2 [SUGGESTION]
-Category: documentation
-Problem: Function missing docstring
-Fix: Add docstring explaining parameters, return value, and purpose
-
-🔵 Issue #3 [SUGGESTION]
-Category: typing
-Problem: No type hints specified
-Fix: Add type hints: def process_data(data: List[int]) -> List[int]:
-
-================================================================================
-STRENGTHS
-================================================================================
-✅ Clear variable names
-✅ Simple, readable logic flow
-✅ Correct filtering logic
-
-================================================================================
-RECOMMENDATIONS
-================================================================================
-💡 Add input validation to handle empty lists
-💡 Consider using NumPy for larger datasets
-💡 Add unit tests for edge cases
-
-================================================================================
-CODE STRUCTURE
-================================================================================
-Lines of code: 6
-Functions: 1
-Classes: 0
-Imports: 0
-Complexity score: 1
-
-================================================================================
-```
+**Key Findings:**
+- Circular dependency: `cookies.py → compat.py → _internal_utils.py`
+- 20 dead test functions (not being executed)
+- High-impact function: `merge_setting()` called by 15+ functions
+- Security: `exec()` usage in `setup.py`
 
 ---
 
 ## 🧪 Testing
-
 ```bash
-# Run all tests
+# Run tests
 pytest
+
+# Run specific test
+pytest test_code_reviewer.py -v
 
 # Run with coverage
 pytest --cov=. --cov-report=html
-
-# Run specific test file
-pytest test_code_reviewer.py -v
-
-# Run with API key (integration tests)
-export ANTHROPIC_API_KEY="your-key"
-pytest -v
 ```
 
 ---
 
-## 🐳 Docker Deployment
+## 📈 Performance
 
-### Build and Run
-```bash
-# Build image
-docker build -t code-reviewer:latest .
+**Benchmarks:**
+- **Small repo** (<10 files): 2-5 minutes
+- **Medium repo** (10-50 files): 5-15 minutes  
+- **Large repo** (50-100 files): 15-30 minutes
 
-# Run container
-docker run -d \
-  -p 8000:8000 \
-  -e ANTHROPIC_API_KEY="your-key" \
-  -v $(pwd)/chroma_db:/app/chroma_db \
-  --name code-reviewer \
-  code-reviewer:latest
-```
+**Bottlenecks:**
+- GPT-4 API calls (30-60s per file)
+- Graph analysis (minimal, <1s per file)
 
-### Docker Compose
-```bash
-# Start services
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop services
-docker-compose down
-```
+**Optimization tips:**
+- Use `gpt-4o-mini` for 10x speedup
+- Filter out test files
+- Skip files >100KB
 
 ---
 
-## 🔧 Configuration
+## 🎯 How It Works
 
-### Environment Variables
-```bash
-ANTHROPIC_API_KEY=your-api-key          # Required
-VECTOR_DB_PATH=./chroma_db              # Vector DB storage path
-EMBEDDING_MODEL=all-MiniLM-L6-v2        # Sentence transformer model
-API_HOST=0.0.0.0                        # API host
-API_PORT=8000                           # API port
-```
-
-### Custom Models
+### 1. **Graph Construction**
 ```python
-# Use different embedding model
-assistant = CodeReviewAssistant(
-    anthropic_api_key=api_key,
-    embedding_model="sentence-transformers/all-mpnet-base-v2"
-)
-
-# Use different vector DB path
-assistant = CodeReviewAssistant(
-    anthropic_api_key=api_key,
-    vector_db_path="/custom/path/to/db"
-)
+# Parse all Python files
+for file in repo.glob("*.py"):
+    tree = ast.parse(file.read_text())
+    # Extract functions, classes, imports
+    # Build dependency_graph[file] = {imported_files}
+    # Build function_call_graph[func] = {called_functions}
 ```
 
----
+### 2. **Static Analysis**
+```python
+# Circular dependencies (DFS)
+def find_cycles(graph):
+    visited, rec_stack = set(), set()
+    for node in graph:
+        dfs(node, visited, rec_stack, path=[])
+    return cycles
 
-## 📈 Performance & Scalability
+# Dead code (call graph)
+def find_dead_code(functions):
+    return [f for f in functions if not f.called_by]
 
-### Benchmarks
-- **Average review time:** 2-5 seconds (depends on code length)
-- **Embedding generation:** ~100ms for 1000 tokens
-- **Vector search:** <50ms for 10k documents
-- **API throughput:** 50-100 requests/sec (single instance)
+# Impact analysis (BFS)
+def calculate_impact(func):
+    upstream = bfs_callers(func)
+    downstream = bfs_callees(func)
+    return ImpactScore(upstream, downstream, complexity)
+```
 
-### Scaling Strategies
-1. **Horizontal scaling:** Deploy multiple API instances behind load balancer
-2. **Caching:** Cache embedding vectors for frequently reviewed code patterns
-3. **Async processing:** Use background tasks for large codebases
-4. **Database optimization:** Use batch operations for bulk reviews
+### 3. **GPT Synthesis**
+```python
+# Combine static analysis + RAG
+issues = codebase_analyzer.analyze_file(file)
+context = rag_db.query(issues, top_k=10)
+review = gpt4.generate(issues + context)
+```
 
 ---
 
 ## 🛣️ Roadmap
 
-### Phase 1 ✅ (Current)
-- [x] Core RAG implementation
-- [x] CLI tool
+**✅ Phase 1 - Core Engine** (Complete)
+- [x] Graph-based static analysis
+- [x] GPT-4 integration with RAG
+- [x] Web interface
 - [x] REST API
-- [x] Docker deployment
-- [x] Basic testing suite
 
-### Phase 2 🚧 (In Progress)
-- [ ] Streamlit web UI
-- [ ] GitHub integration (PR comments)
-- [ ] Multi-language support (JavaScript, Java, Go)
-- [ ] Custom rule engine
-- [ ] Batch processing
+**🚧 Phase 2 - Polish** (In Progress)
+- [ ] Speed optimizations (gpt-4o-mini, caching)
+- [ ] Better GPT prompts (reduce verbosity)
+- [ ] Export to PDF/Markdown
+- [ ] Dark mode UI
 
-### Phase 3 📋 (Planned)
-- [ ] VS Code extension
-- [ ] CI/CD pipeline integration
-- [ ] Team collaboration features
-- [ ] Analytics dashboard
-- [ ] Fine-tuned models for specific languages
+**📋 Phase 3 - Scale** (Planned)
+- [ ] GitHub PR integration (automated comments)
+- [ ] CI/CD plugins (GitHub Actions, GitLab CI)
+- [ ] Multi-language support (JavaScript, TypeScript, Java)
+- [ ] Team dashboards & analytics
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please follow these guidelines:
+Contributions welcome! Please:
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+1. Fork the repo
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
 
-### Development Setup
+**Development setup:**
 ```bash
 # Install dev dependencies
 pip install -r requirements.txt
-
-# Run linters
 black .
 flake8 .
-mypy .
 
 # Run tests
 pytest -v
@@ -462,27 +329,31 @@ pytest -v
 
 ## 📝 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) file for details.
 
 ---
 
 ## 🙏 Acknowledgments
 
-- **Anthropic** for Claude AI API
-- **Sentence-Transformers** for embedding models
+- **OpenAI** for GPT-4 API
 - **ChromaDB** for vector database
-- **FastAPI** for web framework
+- **FastAPI** for backend framework
+- **Python `ast` module** for code parsing
 
 ---
 
 ## 📧 Contact
 
-**Your Name** - [your.email@example.com](mailto:your.email@example.com)
-
-Project Link: [https://github.com/yourusername/ai-code-reviewer](https://github.com/yourusername/ai-code-reviewer)
+**Oussama Abouyahia**  
+📧 [oabouyahia@gmail.com](mailto:oabouyahia@gmail.com)  
+🔗 [github.com/Oussamcsc/codebase-intelligence](https://github.com/Oussamcsc/codebase-intelligence)
 
 ---
 
-## 🌟 Star this repo if you find it useful!
+<div align="center">
 
-Made with ❤️ by [Your Name]
+**⭐ Star this repo if you find it useful!**
+
+Built with ❤️ using Python, React, and GPT-4
+
+</div>
