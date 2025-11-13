@@ -37,7 +37,6 @@ env/
 .env
 
 # Vector DB
-chroma_db/
 *.db
 *.parquet
 

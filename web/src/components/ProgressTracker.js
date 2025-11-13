@@ -5,41 +5,31 @@ import { ArrowLeft, CheckCircle, XCircle, Clock, FileText, Zap } from 'lucide-re
 const ProgressTracker = ({ jobId, onComplete, onBack }) => {
   console.log('🚀 ProgressTracker MOUNTED');
   console.log('🆔 jobId prop:', jobId);
-  console.log('🔍 jobId type:', typeof jobId);
-  console.log('❓ jobId is undefined?', jobId === undefined);
 
   const [status, setStatus] = useState(null);
   const [error, setError] = useState('');
-  const [isPolling, setIsPolling] = useState(true);
-  const [pollAttempts, setPollAttempts] = useState(0);
-  const MAX_POLL_ATTEMPTS = 300; // 10 minutes
 
   useEffect(() => {
-    console.log('🔄 useEffect triggered');
-    console.log('   jobId:', jobId);
-    console.log('   isPolling:', isPolling);
+    console.log('🔄 useEffect triggered - jobId:', jobId);
 
     if (!jobId) {
       console.error('❌ NO JOB ID PROVIDED!');
       setError('No job ID provided');
-      setIsPolling(false);
       return;
     }
 
-    let pollInterval;
+    let isCancelled = false;
+    let pollInterval = null;
 
     const pollStatus = async () => {
-      console.log(`📡 Polling attempt ${pollAttempts + 1}/${MAX_POLL_ATTEMPTS}`);
+      if (isCancelled) {
+        console.log('⏹️ Polling cancelled');
+        return;
+      }
 
       try {
-        if (pollAttempts >= MAX_POLL_ATTEMPTS) {
-          console.error('⏰ TIMEOUT: Max poll attempts reached');
-          setError('Analysis timed out after 10 minutes');
-          setIsPolling(false);
-          return;
-        }
+        console.log(`📡 Polling status for job: ${jobId}`);
 
-        console.log(`📞 GET /github/status/${jobId}`);
         const response = await axios.get(`/github/status/${jobId}`, {
           timeout: 10000
         });
@@ -47,63 +37,77 @@ const ProgressTracker = ({ jobId, onComplete, onBack }) => {
         const jobStatus = response.data;
         console.log('📊 Status update:', jobStatus);
 
+        if (isCancelled) return;
+
         setStatus(jobStatus);
-        setPollAttempts(prev => prev + 1);
 
         if (jobStatus.status === 'completed') {
-          console.log('🎉 STATUS IS COMPLETED!');
-          setIsPolling(false);
+          console.log('🎉 JOB COMPLETED!');
+
+          if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+          }
 
           try {
-            console.log(`📥 Fetching results: GET /github/results/${jobId}`);
+            console.log(`📥 Fetching results...`);
             const resultsResponse = await axios.get(`/github/results/${jobId}`);
             console.log('✅ GOT RESULTS:', resultsResponse.data);
 
-            const results = resultsResponse.data.results;
-            console.log('🎯 Calling onComplete with:', results);
-
-            onComplete(results);
-            console.log('✅ onComplete called successfully!');
-
+            if (!isCancelled) {
+              const results = resultsResponse.data.results;
+              console.log('🎯 Calling onComplete');
+              onComplete(results);
+            }
           } catch (error) {
-            console.error('❌ FAILED TO FETCH RESULTS:', error);
-            console.error('Error response:', error.response?.data);
-            setError(`Failed to fetch results: ${error.response?.data?.detail || error.message}`);
+            console.error('❌ Failed to fetch results:', error);
+            if (!isCancelled) {
+              setError(`Failed to fetch results: ${error.message}`);
+            }
           }
         } else if (jobStatus.status === 'failed') {
-          console.error('❌ JOB FAILED:', jobStatus);
-          setIsPolling(false);
-          setError(`Analysis failed: ${jobStatus.current_task || 'Unknown error'}`);
+          console.error('❌ JOB FAILED');
+          if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+          }
+          if (!isCancelled) {
+            setError(`Analysis failed: ${jobStatus.current_task || 'Unknown error'}`);
+          }
         }
       } catch (error) {
-        console.error('❌ POLLING ERROR:', error);
-        console.error('Error code:', error.code);
-        console.error('Error response:', error.response);
+        console.error('❌ Polling error:', error);
+
+        if (isCancelled) return;
 
         if (error.code === 'ECONNABORTED') {
-          setError('Connection timeout. Backend may be slow or down.');
+          console.log('⏰ Request timeout, will retry...');
         } else if (error.response?.status === 404) {
+          if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+          }
           setError('Job not found. Server may have restarted.');
         } else {
-          setError(`Polling error: ${error.message}`);
+          console.log('⚠️ Polling error, will retry:', error.message);
         }
-        setIsPolling(false);
       }
     };
 
-    if (isPolling && jobId) {
-      console.log('▶️ Starting polling interval');
-      pollStatus(); // Poll immediately
-      pollInterval = setInterval(pollStatus, 2000); // Then every 2 seconds
-    }
+    // Start polling
+    console.log('▶️ Starting polling interval');
+    pollStatus(); // Poll immediately
+    pollInterval = setInterval(pollStatus, 2000);
 
+    // Cleanup
     return () => {
+      console.log('🧹 Cleanup - stopping polling');
+      isCancelled = true;
       if (pollInterval) {
-        console.log('⏹️ Cleaning up polling interval');
         clearInterval(pollInterval);
       }
     };
-  }, [jobId, isPolling, onComplete, pollAttempts]);
+  }, [jobId, onComplete]);
 
   const getStatusIcon = () => {
     if (!status) return <Clock className="animate-spin" size={20} />;
@@ -355,26 +359,19 @@ const ProgressTracker = ({ jobId, onComplete, onBack }) => {
                 borderRadius: '8px',
                 border: '1px solid rgba(255, 255, 255, 0.1)'
               }}>
-                <h4 style={{
-                  fontSize: '0.95rem',
-                  marginBottom: '0.5rem',
-                  color: 'rgba(255, 255, 255, 0.9)'
-                }}>
-                  Job ID: <code style={{
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    padding: '0.25rem 0.5rem',
-                    borderRadius: '4px',
-                    fontSize: '0.8rem'
-                  }}>
-                    {jobId}
-                  </code>
-                </h4>
                 <p style={{
                   fontSize: '0.875rem',
                   color: 'rgba(255, 255, 255, 0.7)',
                   lineHeight: '1.4'
                 }}>
-                  The analysis is running. Check browser console (F12) for detailed logs.
+                  Real-time updates every 2 seconds. Job ID: <code style={{
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    padding: '0.125rem 0.375rem',
+                    borderRadius: '3px',
+                    fontSize: '0.8rem'
+                  }}>
+                    {jobId}
+                  </code>
                 </p>
               </div>
             </div>

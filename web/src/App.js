@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './App.css';
 import GitHubAnalyzer from './components/GitHubAnalyzer';
 import AnalysisResults from './components/AnalysisResults';
 import ProgressTracker from './components/ProgressTracker';
+import GitHubAuthTest from './components/GitHubAuthTest';
 import { Github, Code2, Zap, Shield } from 'lucide-react';
 
 // Configure axios base URL
@@ -14,6 +15,74 @@ function App() {
   const [currentView, setCurrentView] = useState('home');
   const [analysisJob, setAnalysisJob] = useState(null);
   const [analysisResults, setAnalysisResults] = useState(null);
+  const [githubUser, setGithubUser] = useState(null);
+
+  // Check for test mode
+  const isTestMode = window.location.pathname === '/test-auth';
+
+  // Handle OAuth callback
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+
+    if (code && state && window.location.pathname === '/auth/callback') {
+      console.log('🔄 Handling OAuth callback in main app');
+      handleOAuthCallback(code, state);
+    }
+  }, []);
+
+  // Check for stored auth
+  useEffect(() => {
+    const storedToken = localStorage.getItem('github_token');
+    const storedUser = localStorage.getItem('github_user');
+
+    if (storedToken && storedUser) {
+      console.log('✅ Found stored GitHub auth');
+      setGithubUser(JSON.parse(storedUser));
+    }
+  }, []);
+
+  const handleOAuthCallback = async (code, state) => {
+    console.log('🔄 Exchanging code for token...');
+
+    try {
+      const response = await axios.post('/auth/github/callback', null, {
+        params: { code, state }
+      });
+
+      console.log('✅ OAuth callback success:', response.data);
+
+      const userData = response.data.user;
+      setGithubUser(userData);
+
+      // Store in localStorage
+      localStorage.setItem('github_token', userData.access_token);
+      localStorage.setItem('github_user', JSON.stringify(userData));
+
+      // Clean URL and go to github analyzer
+      window.history.replaceState({}, document.title, "/");
+      setCurrentView('github');
+
+    } catch (err) {
+      console.error('❌ OAuth callback error:', err);
+      alert('GitHub authentication failed. Please try again.');
+      window.history.replaceState({}, document.title, "/");
+      setCurrentView('home');
+    }
+  };
+
+  const handleGitHubLogout = () => {
+    console.log('🚪 Logging out of GitHub');
+    localStorage.removeItem('github_token');
+    localStorage.removeItem('github_user');
+    setGithubUser(null);
+  };
+
+  // If in test mode, show test component
+  if (isTestMode) {
+    return <GitHubAuthTest />;
+  }
 
   const handleAnalysisStart = (jobData) => {
     console.log('🎯 APP.JS - handleAnalysisStart called');
@@ -52,6 +121,8 @@ function App() {
           <GitHubAnalyzer
             onAnalysisStart={handleAnalysisStart}
             onBack={() => setCurrentView('home')}
+            githubUser={githubUser}
+            onLogout={handleGitHubLogout}
           />
         );
       case 'progress':
