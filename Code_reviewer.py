@@ -24,6 +24,42 @@ from type_analyzer import TypeAnalyzer, TypeIssue
 from duplicate_detector import DuplicateDetector, DuplicateIssue
 
 
+class DummyCollection:
+    """Fallback collection when ChromaDB is not available"""
+
+    def add(self, documents=None, metadatas=None, ids=None, **kwargs):
+        """Dummy add - does nothing"""
+        pass
+
+    def query(self, query_texts=None, n_results=5, **kwargs):
+        """Dummy query - returns empty results"""
+        return {
+            "documents": [[]],
+            "metadatas": [[]],
+            "distances": [[]]
+        }
+
+    def count(self):
+        """Dummy count - returns 0"""
+        return 0
+
+    def get(self, ids=None, **kwargs):
+        """Dummy get - returns empty"""
+        return {
+            "documents": [],
+            "metadatas": [],
+            "ids": []
+        }
+
+    def update(self, *args, **kwargs):
+        """Dummy update - does nothing"""
+        pass
+
+    def delete(self, *args, **kwargs):
+        """Dummy delete - does nothing"""
+        pass
+
+
 class CodeReviewer:
     """
     Main code reviewer - orchestrates everything
@@ -47,9 +83,9 @@ class CodeReviewer:
             duplicate_detector: Optional[DuplicateDetector] = None,
             embedding_model: str = "all-MiniLM-L6-v2",
             vector_db_path: str = "./chroma_db",
-            skip_duplicate_detection: bool = False  # New parameter for large repos
+            skip_duplicate_detection: bool = False
     ):
-        """Initialize reviewer with all analyzers"""
+        """Initialize reviewer with all analyzers (ChromaDB optional)"""
         self.client = OpenAI(api_key=openai_api_key)
 
         # Initialize all analyzers
@@ -59,20 +95,37 @@ class CodeReviewer:
         self.duplicate_detector = duplicate_detector or DuplicateDetector()
         self.skip_duplicate_detection = skip_duplicate_detection
 
-        self.embedding_model = SentenceTransformer(embedding_model)
-
-        # Initialize ChromaDB for RAG
-        self.chroma_client = chromadb.PersistentClient(path=vector_db_path)
-
+        # Try to initialize SentenceTransformer (optional)
+        self.embedding_model = None
+        self.chroma_available = False
         try:
-            self.best_practices = self.chroma_client.get_collection("best_practices")
-        except:
-            self.best_practices = self.chroma_client.create_collection("best_practices")
+            from sentence_transformers import SentenceTransformer
+            import chromadb
 
-        try:
-            self.common_issues = self.chroma_client.get_collection("common_issues")
-        except:
-            self.common_issues = self.chroma_client.create_collection("common_issues")
+            self.embedding_model = SentenceTransformer(embedding_model)
+            self.chroma_client = chromadb.PersistentClient(path=vector_db_path)
+
+            try:
+                self.best_practices = self.chroma_client.get_collection("best_practices")
+            except:
+                self.best_practices = self.chroma_client.create_collection("best_practices")
+
+            try:
+                self.common_issues = self.chroma_client.get_collection("common_issues")
+            except:
+                self.common_issues = self.chroma_client.create_collection("common_issues")
+
+            self.chroma_available = True
+            print("✅ ChromaDB initialized successfully")
+
+        except (ImportError, Exception) as e:
+            print(f"⚠️  ChromaDB not available: {e}")
+            print("⚠️  Running without knowledge base (core analysis still works)")
+
+            # Create dummy collections so code doesn't break
+            self.best_practices = DummyCollection()
+            self.common_issues = DummyCollection()
+            self.chroma_client = None
 
         # Store results from each analyzer for access
         self.last_analysis_results = {
@@ -737,32 +790,64 @@ CRITICAL REQUIREMENTS:
 
     def add_best_practice(self, practice: str, category: str, metadata: Dict = None):
         """Add best practice to knowledge base"""
-        embedding = self.embedding_model.encode(practice).tolist()
-        meta = metadata or {}
-        meta["category"] = category
 
+        # Check if Chroma is available
+        if not self.chroma_available:
+            return
+
+        # Ensure metadata is a dictionary
+        if metadata is None:
+            metadata = {}
+        metadata['category'] = category
+
+        # Create embedding
+        embedding = self.embedding_model.encode(practice).tolist()
+
+        # Add to best practices
         self.best_practices.add(
             embeddings=[embedding],
             documents=[practice],
-            metadatas=[meta],
+            metadatas=[metadata],
             ids=[f"bp_{self.best_practices.count() + 1}"]
         )
 
     def add_common_issue(self, issue: str, category: str, metadata: Dict = None):
         """Add common issue to knowledge base"""
+
+        # Check if Chroma is available
+        if not self.chroma_available:
+            return
+
+        # Ensure metadata is a dictionary
+        if metadata is None:
+            metadata = {}
+        metadata['category'] = category
+
+        # Create embedding
         embedding = self.embedding_model.encode(issue).tolist()
-        meta = metadata or {}
-        meta["category"] = category
 
         self.common_issues.add(
             embeddings=[embedding],
             documents=[issue],
-            metadatas=[meta],
+            metadatas=[metadata],
             ids=[f"issue_{self.common_issues.count() + 1}"]
         )
 
     def initialize_knowledge_base(self):
-        """Initialize RAG with best practices"""
+        """Initialize RAG with best practices (skipped if ChromaDB unavailable)"""
+
+        # Skip if ChromaDB not available
+        if not self.chroma_available:
+            print("⚠️  Knowledge base unavailable - skipping initialization")
+            return
+
+        # Only initialize if collections are empty
+        if self.best_practices.count() > 0:
+            print("✅ Knowledge base already initialized")
+            return
+
+        print("🔧 Initializing knowledge base...")
+
         best_practices = [
             ("Use type hints for all function parameters", "typing"),
             ("Write docstrings for public functions", "documentation"),
@@ -779,8 +864,8 @@ CRITICAL REQUIREMENTS:
         for practice, category in best_practices:
             try:
                 self.add_best_practice(practice, category)
-            except:
-                pass
+            except Exception as e:
+                print(f"⚠️  Failed to add best practice: {e}")
 
         common_issues = [
             ("Missing input validation can lead to security vulnerabilities", "security"),
@@ -798,5 +883,8 @@ CRITICAL REQUIREMENTS:
         for issue, category in common_issues:
             try:
                 self.add_common_issue(issue, category)
-            except:
-                pass
+            except Exception as e:
+                print(f"⚠️  Failed to add common issue: {e}")
+
+        print(
+            f"✅ Knowledge base initialized: {self.best_practices.count()} practices, {self.common_issues.count()} issues")

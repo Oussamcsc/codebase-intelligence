@@ -1,24 +1,15 @@
-# Core dependencies
-anthropic==0.39.0
-sentence-transformers==3.3.1
-chromadb==0.5.23
+# Core API
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pydantic==2.10.3
 
-# Additional dependencies
+# Configuration
 python-dotenv==1.0.1
+
+# AI & HTTP
+openai==1.57.4
 requests==2.32.3
-numpy==1.26.4
-torch==2.5.1
+httpx==0.28.1
 
-# Development dependencies
-pytest==8.3.4
-pytest-asyncio==0.24.0
-pytest-cov==6.0.0
-black==24.10.0
-flake8==7.1.1
-mypy==1.13.0
-
-# Optional: For Streamlit UI (Phase 2)
-# streamlit==1.41.1
+# File handling
+python-multipart==0.0.12
