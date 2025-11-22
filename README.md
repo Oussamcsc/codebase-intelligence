@@ -1,359 +1,345 @@
-# 🧠 Codebase Intelligence
+<div align="center">
 
-> **Graph-powered code analysis that goes beyond traditional linting**
+# 🚀 Code Intel
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-latest-green.svg)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-18-blue.svg)](https://reactjs.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+### AI-Powered Codebase Analysis Platform
 
-An intelligent code review system that combines **static graph analysis** (DFS, BFS, call graphs) with **GPT-4** to provide comprehensive, evidence-based code reviews. Goes beyond syntax checking to analyze circular dependencies, dead code, function impact, and architectural patterns.
+*Understand any codebase in seconds, not hours*
 
----
+[![Live Demo](https://img.shields.io/badge/demo-live-success)](https://codebase-intelligence.vercel.app)
+[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![React](https://img.shields.io/badge/React-18+-61DAFB.svg)](https://reactjs.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688.svg)](https://fastapi.tiangolo.com/)
+[![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4-412991.svg)](https://openai.com/)
 
-## ✨ Key Features
+[Live Demo](https://codebase-intelligence.vercel.app) • [Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation)
 
-### 🔍 **Graph-Based Static Analysis**
-- **Circular dependency detection** using depth-first search
-- **Dead code identification** through call graph analysis
-- **Impact analysis** with breadth-first traversal
-- **Function complexity** calculation (cyclomatic complexity)
-- **Type hint coverage** tracking
-
-### 🤖 **AI-Powered Insights**
-- **GPT-4 integration** for synthesized recommendations
-- **RAG-enhanced reviews** using ChromaDB vector database
-- **Context-aware suggestions** based on codebase patterns
-- **Prioritized issue reporting** (Critical → Warning → Suggestion)
-
-### 📊 **Comprehensive Metrics**
-- Function-level impact scores
-- Dependency graph visualization data
-- Code quality scoring (1-10 scale)
-- Issue categorization and severity levels
-- Detailed evidence for each finding
-
-### 🚀 **Production Ready**
-- Full-stack web interface (React + FastAPI)
-- REST API for CI/CD integration
-- Batch repository analysis
-- Export reports (JSON format)
+</div>
 
 ---
 
-## 🏗️ Architecture
-```
-┌──────────────────────────────────────────────────────────┐
-│                    Repository Input                       │
-└────────────────────────┬─────────────────────────────────┘
-                         │
-                         v
-┌──────────────────────────────────────────────────────────┐
-│              Codebase Analyzer (Graph Builder)           │
-│  • Parse AST for all Python files                        │
-│  • Build dependency graph (file-level)                   │
-│  • Build call graph (function-level)                     │
-│  • Calculate complexity metrics                          │
-└────────────────────────┬─────────────────────────────────┘
-                         │
-                         v
-┌──────────────────────────────────────────────────────────┐
-│              Static Analysis Engine                       │
-│  • DFS for circular dependencies                         │
-│  • Call graph for dead code detection                    │
-│  • BFS for impact analysis                               │
-│  • Type hint validation                                  │
-└────────────────────────┬─────────────────────────────────┘
-                         │
-                         v
-┌──────────────────────────────────────────────────────────┐
-│                   GPT Review Layer                        │
-│  • RAG with ChromaDB (best practices)                    │
-│  • GPT-4 synthesis & prioritization                      │
-│  • Root cause analysis                                   │
-└────────────────────────┬─────────────────────────────────┘
-                         │
-                         v
-┌──────────────────────────────────────────────────────────┐
-│                   Structured Output                       │
-│  • JSON report with evidence                             │
-│  • Severity-based grouping                               │
-│  • Actionable recommendations                            │
-└──────────────────────────────────────────────────────────┘
-```
+## 🎯 What is Code Intel?
 
-**Tech Stack:**
-- **Backend:** Python 3.11, FastAPI, AST parsing
-- **Frontend:** React 18, Axios
-- **AI/ML:** OpenAI GPT-4, ChromaDB (RAG), Sentence Transformers
-- **Analysis:** NetworkX-style graph algorithms (DFS/BFS)
+Code Intel is an intelligent code analysis platform that combines **static analysis**, **AST parsing**, and **LLM reasoning** to help developers understand complex codebases, identify issues, and improve code quality—all in real-time.
+
+Simply connect your GitHub repository and get:
+- 🔍 **Deep code analysis** - Security vulnerabilities, performance bottlenecks, anti-patterns
+- 🔄 **Circular dependency detection** - Using graph traversal algorithms
+- 📊 **Code duplication tracking** - With exact file/line references
+- 🤖 **AI-powered insights** - Context-aware recommendations from specialized agents
+- ⚡ **Real-time results** - Stream analysis progress via WebSocket
+
+---
+
+## ✨ Features
+
+### 🔌 **GitHub Integration**
+One-click repository scanning directly from GitHub URLs. No manual uploads needed.
+
+### 🧠 **Multi-Agent Analysis**
+Specialized AI agents analyze different aspects:
+- **Security Agent** - Identifies vulnerabilities and security risks
+- **Performance Agent** - Detects bottlenecks and optimization opportunities  
+- **Architecture Agent** - Reviews code structure and design patterns
+
+### 🎨 **AST-Based Code Understanding**
+Parse and analyze code structure using Abstract Syntax Trees to identify:
+- Code patterns and anti-patterns
+- Duplicate code blocks with exact references
+- Structural issues and complexity hotspots
+
+### 📈 **RAG Pipeline**
+Vector embeddings (ChromaDB) combined with traditional static analysis for context-aware insights that understand your entire codebase.
+
+### 🎯 **Graph Analysis**
+Directed graph traversal to detect circular dependencies and visualize module relationships.
+
+### 💾 **Export Results**
+Download comprehensive analysis reports as JSON for further processing or sharing.
+
+---
+
+## 🛠️ Tech Stack
+
+**Backend:**
+- FastAPI (Python) - High-performance async API
+- LangChain - Multi-agent orchestration
+- ChromaDB - Vector database for embeddings
+- OpenAI GPT-4 - LLM reasoning
+
+**Frontend:**
+- React 18 - Modern UI framework
+- WebSocket - Real-time progress updates
+- Glassmorphism UI - Beautiful, responsive design
+
+**Infrastructure:**
+- PostgreSQL - Data persistence
+- GitHub API - Repository integration
+- Vercel - Deployment
 
 ---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- **Python 3.11+**
-- **Node.js 18+** and npm
-- **OpenAI API key** ([Get one here](https://platform.openai.com/api-keys))
 
-### Installation
+- Python 3.11+
+- Node.js 18+
+- OpenAI API key ([Get one here](https://platform.openai.com/api-keys))
+- GitHub OAuth App ([Setup guide](#github-oauth-setup))
+
+### 1. Clone the Repository
 ```bash
-# 1. Clone repository
-git clone git@github.com:Oussamcsc/codebase-intelligence.git
-cd codebase-intelligence
+git clone https://github.com/yourusername/code-intel.git
+cd code-intel
+```
 
-# 2. Backend setup
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements-full.txt
+### 2. Backend Setup
+```bash
+# Install Python dependencies
+pip install -r requirements.txt
 
-# 3. Configure API key
+# Copy environment template
 cp .env.example .env
-# Edit .env and add: OPENAI_API_KEY=sk-your-key-here
 
-# 4. Start backend
-python api.py
-# API runs at http://localhost:8000
+# Edit .env and add your credentials
+nano .env
+```
 
-# 5. Frontend setup (new terminal)
+**Required environment variables:**
+```bash
+# OpenAI API Key
+OPENAI_API_KEY=sk-your-key-here
+
+# GitHub OAuth (see setup guide below)
+GITHUB_CLIENT_ID=your-client-id
+GITHUB_CLIENT_SECRET=your-client-secret
+
+# Server URLs (for local development)
+BACKEND_URL=http://localhost:8000
+FRONTEND_URL=http://localhost:3000
+
+# Vector DB
+VECTOR_DB_PATH=./chroma_db
+EMBEDDING_MODEL=all-MiniLM-L6-v2
+```
+
+### 3. Frontend Setup
+```bash
+# Navigate to web directory
 cd web
+
+# Install dependencies
 npm install
+
+# Start development server
 npm start
-# UI opens at http://localhost:3000
 ```
+
+### 4. Start the Backend
+```bash
+# From project root
+python api.py
+```
+
+### 5. Access the App
+
+Open [http://localhost:3000](http://localhost:3000) in your browser 🎉
 
 ---
 
-## 💻 Usage
+## 🔐 GitHub OAuth Setup
 
-### Web Interface
+To enable GitHub repository scanning, you need to create a GitHub OAuth App:
 
-1. **Open** `http://localhost:3000`
-2. **Paste** GitHub repository URL (e.g., `https://github.com/psf/requests`)
-3. **Click** "Analyze Repository"
-4. **Wait** 5-15 minutes (depends on repo size)
-5. **Review** results with expandable issues grouped by severity
+### Step 1: Create OAuth App
 
-### API Endpoints
+1. Go to [GitHub Developer Settings](https://github.com/settings/developers)
+2. Click **"New OAuth App"**
+3. Fill in the details:
+   - **Application name:** `Code Intel (Local Dev)`
+   - **Homepage URL:** `http://localhost:3000`
+   - **Authorization callback URL:** `http://localhost:8000/auth/github/callback`
+4. Click **"Register application"**
 
-**Health Check**
+### Step 2: Get Credentials
+
+1. Copy your **Client ID**
+2. Click **"Generate a new client secret"** and copy it
+3. Add both to your `.env` file:
 ```bash
-curl http://localhost:8000/health
+GITHUB_CLIENT_ID=your_client_id_here
+GITHUB_CLIENT_SECRET=your_client_secret_here
 ```
 
-**Analyze Repository**
+### Step 3: Restart Backend
 ```bash
-curl -X POST http://localhost:8000/analyze \
-  -H "Content-Type: application/json" \
-  -d '{
-    "repository_url": "https://github.com/psf/requests",
-    "branch": "main"
-  }'
+# Kill the running server and restart
+python api.py
 ```
 
-**Response:**
+✅ GitHub integration is now ready!
+
+---
+
+## 📖 Usage
+
+### Analyze a Repository
+
+1. **Enter Repository URL**
+```
+   https://github.com/username/repository
+```
+
+2. **Configure Analysis** (optional)
+   - Branch: `main` (default)
+   - File patterns: `*.py, *.js, *.ts` (customize as needed)
+
+3. **Start Analysis**
+   - Click "Analyze Repository"
+   - Watch real-time progress via WebSocket
+   - View results in interactive file explorer
+
+4. **Review Results**
+   - Expandable file tree showing all issues
+   - Detailed descriptions with severity levels
+   - Code snippets with exact line references
+   - Export as JSON for further analysis
+
+### Example Repositories to Try
+
+| Repository | Language | Complexity |
+|-----------|----------|-----------|
+| `pallets/flask` | Python | Medium |
+| `django/django` | Python | High |
+| `fastapi/fastapi` | Python | Medium |
+| `facebook/react` | JavaScript | High |
+
+---
+
+## 🏗️ Architecture
+```
+┌──────────────────────────────────────────────────────────────┐
+│                         Code Intel                            │
+└──────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+         ┌────▼────┐    ┌────▼────┐    ┌────▼────┐
+         │  React  │    │ FastAPI │    │ GitHub  │
+         │   Web   │◄──►│   API   │◄──►│   API   │
+         │  (3000) │ WS │  (8000) │    │         │
+         └─────────┘    └────┬────┘    └─────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              │              │              │
+         ┌────▼────┐   ┌────▼────┐   ┌────▼────┐
+         │ OpenAI  │   │ ChromaDB│   │  AST    │
+         │   API   │   │ Vector  │   │ Parser  │
+         │  (GPT4) │   │   DB    │   │         │
+         └─────────┘   └─────────┘   └─────────┘
+```
+
+### Analysis Pipeline
+
+1. **Repository Cloning** - Clone GitHub repo to temp directory
+2. **File Discovery** - Identify relevant files based on patterns
+3. **AST Parsing** - Parse code structure and extract metadata
+4. **Vector Embedding** - Generate embeddings and store in ChromaDB
+5. **Static Analysis** - Run traditional linters and analyzers
+6. **Graph Analysis** - Build dependency graph and detect cycles
+7. **LLM Reasoning** - Multi-agent analysis with GPT-4
+8. **Results Synthesis** - Combine insights and generate report
+
+---
+
+## 🎨 API Endpoints
+
+### Analysis
+- `POST /github/analyze` - Start repository analysis
 ```json
-{
-  "repository": "https://github.com/psf/requests",
-  "branch": "main",
-  "files_analyzed": 29,
-  "total_issues": 210,
-  "results": [
-    {
-      "file_path": "src/requests/sessions.py",
-      "review": {
-        "overall_quality": "6",
-        "summary": "High complexity functions detected...",
-        "critical_findings": {
-          "correctness_issues": 0,
-          "stability_risks": 2,
-          "performance_problems": 1,
-          "maintainability_debt": 4
-        },
-        "issues": [
-          {
-            "issue_type": "Critical",
-            "location": "Line 159",
-            "bug_risk": "Circular dependency detected",
-            "evidence": {
-              "cycle": ["sessions.py", "cookies.py", "compat.py"],
-              "detection_method": "DFS_on_dependency_graph"
-            }
-          }
-        ]
-      }
-    }
-  ]
-}
+  {
+    "repo_url": "https://github.com/user/repo",
+    "branch": "main",
+    "file_patterns": ["*.py"]
+  }
 ```
+
+### Status & Results
+- `GET /github/status/{job_id}` - Check analysis status
+- `GET /github/results/{job_id}` - Get analysis results
+- `WS /ws/progress/{job_id}` - Real-time progress updates
+
+### Authentication
+- `GET /auth/github` - Initiate GitHub OAuth flow
+- `GET /auth/github/callback` - OAuth callback handler
 
 ---
 
-## 📊 Example Analysis
+## 🐛 Troubleshooting
 
-**Tested on:** Python `requests` library (29 files, ~10K LOC)
+### Common Issues
 
-**Results:**
-- ✅ **210 issues found** in ~15 minutes
-- 🔴 **3 critical issues** (circular dependencies, security risks)
-- ⚠️ **45 warnings** (dead code, high complexity, unused imports)
-- 💡 **162 suggestions** (missing type hints, documentation)
+**"GitHub OAuth not working"**
+- Verify `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` are set correctly
+- Check callback URL matches: `http://localhost:8000/auth/github/callback`
+- Make sure backend is running on port 8000
 
-**Key Findings:**
-- Circular dependency: `cookies.py → compat.py → _internal_utils.py`
-- 20 dead test functions (not being executed)
-- High-impact function: `merge_setting()` called by 15+ functions
-- Security: `exec()` usage in `setup.py`
+**"OpenAI API errors"**
+- Verify your `OPENAI_API_KEY` is valid
+- Check you have API credits remaining
+- Ensure you're using GPT-4 compatible key
 
----
+**"WebSocket connection failed"**
+- Backend must be running on port 8000
+- Check CORS settings in `api.py`
+- Verify `FRONTEND_URL` is set to `http://localhost:3000`
 
-## 🧪 Testing
-```bash
-# Run tests
-pytest
+**"Analysis stuck at X%"**
+- Large repos take time (5-10 minutes for 1000+ files)
+- Check backend logs for errors
+- Ensure sufficient disk space for temp cloning
 
-# Run specific test
-pytest test_code_reviewer.py -v
+### Getting Help
 
-# Run with coverage
-pytest --cov=. --cov-report=html
-```
-
----
-
-## 📈 Performance
-
-**Benchmarks:**
-- **Small repo** (<10 files): 2-5 minutes
-- **Medium repo** (10-50 files): 5-15 minutes  
-- **Large repo** (50-100 files): 15-30 minutes
-
-**Bottlenecks:**
-- GPT-4 API calls (30-60s per file)
-- Graph analysis (minimal, <1s per file)
-
-**Optimization tips:**
-- Use `gpt-4o-mini` for 10x speedup
-- Filter out test files
-- Skip files >100KB
-
----
-
-## 🎯 How It Works
-
-### 1. **Graph Construction**
-```python
-# Parse all Python files
-for file in repo.glob("*.py"):
-    tree = ast.parse(file.read_text())
-    # Extract functions, classes, imports
-    # Build dependency_graph[file] = {imported_files}
-    # Build function_call_graph[func] = {called_functions}
-```
-
-### 2. **Static Analysis**
-```python
-# Circular dependencies (DFS)
-def find_cycles(graph):
-    visited, rec_stack = set(), set()
-    for node in graph:
-        dfs(node, visited, rec_stack, path=[])
-    return cycles
-
-# Dead code (call graph)
-def find_dead_code(functions):
-    return [f for f in functions if not f.called_by]
-
-# Impact analysis (BFS)
-def calculate_impact(func):
-    upstream = bfs_callers(func)
-    downstream = bfs_callees(func)
-    return ImpactScore(upstream, downstream, complexity)
-```
-
-### 3. **GPT Synthesis**
-```python
-# Combine static analysis + RAG
-issues = codebase_analyzer.analyze_file(file)
-context = rag_db.query(issues, top_k=10)
-review = gpt4.generate(issues + context)
-```
-
----
-
-## 🛣️ Roadmap
-
-**✅ Phase 1 - Core Engine** (Complete)
-- [x] Graph-based static analysis
-- [x] GPT-4 integration with RAG
-- [x] Web interface
-- [x] REST API
-
-**🚧 Phase 2 - Polish** (In Progress)
-- [ ] Speed optimizations (gpt-4o-mini, caching)
-- [ ] Better GPT prompts (reduce verbosity)
-- [ ] Export to PDF/Markdown
-- [ ] Dark mode UI
-
-**📋 Phase 3 - Scale** (Planned)
-- [ ] GitHub PR integration (automated comments)
-- [ ] CI/CD plugins (GitHub Actions, GitLab CI)
-- [ ] Multi-language support (JavaScript, TypeScript, Java)
-- [ ] Team dashboards & analytics
+- 📧 Open an [issue](https://github.com/yourusername/code-intel/issues)
+- 💬 Check existing [discussions](https://github.com/yourusername/code-intel/discussions)
+- 🐛 Submit bug reports with logs and repo details
 
 ---
 
 ## 🤝 Contributing
 
-Contributions welcome! Please:
+Contributions are welcome! Here's how you can help:
 
-1. Fork the repo
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
-
-**Development setup:**
-```bash
-# Install dev dependencies
-pip install -r requirements-full.txt
-black .
-flake8 .
-
-# Run tests
-pytest -v
-```
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ---
 
 ## 📝 License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
 ## 🙏 Acknowledgments
 
-- **OpenAI** for GPT-4 API
-- **ChromaDB** for vector database
-- **FastAPI** for backend framework
-- **Python `ast` module** for code parsing
-
----
-
-## 📧 Contact
-
-**Oussama Abouyahia**  
-📧 [oabouyahia@gmail.com](mailto:oabouyahia@gmail.com)  
-🔗 [github.com/Oussamcsc/codebase-intelligence](https://github.com/Oussamcsc/codebase-intelligence)
+- OpenAI for GPT-4 API
+- LangChain for agent orchestration framework
+- ChromaDB for vector database
+- FastAPI for excellent API framework
+- React team for the UI library
 
 ---
 
 <div align="center">
 
-**⭐ Star this repo if you find it useful!**
+**Built with ❤️ by [Oussama Abouyahia](https://github.com/yourusername)**
 
-Built with ❤️ using Python, React, and GPT-4
+[⬆ Back to Top](#-code-intel)
 
 </div>
