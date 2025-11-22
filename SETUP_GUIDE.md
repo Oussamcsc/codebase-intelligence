@@ -21,7 +21,7 @@ python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -r requirements-full.txt
 ```
 
 ### Step 2: Get API Key (5 min)

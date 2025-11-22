@@ -13,8 +13,6 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
-from sentence_transformers import SentenceTransformer
-import chromadb
 import ast
 
 # Import all our analyzers
@@ -27,11 +25,11 @@ from duplicate_detector import DuplicateDetector, DuplicateIssue
 class DummyCollection:
     """Fallback collection when ChromaDB is not available"""
 
-    def add(self, documents=None, metadatas=None, ids=None, **kwargs):
+    def add(self, documents=None, metadatas=None, ids=None, embeddings=None, **kwargs):
         """Dummy add - does nothing"""
         pass
 
-    def query(self, query_texts=None, n_results=5, **kwargs):
+    def query(self, query_texts=None, query_embeddings=None, n_results=5, **kwargs):
         """Dummy query - returns empty results"""
         return {
             "documents": [[]],
@@ -70,7 +68,7 @@ class CodeReviewer:
     3. Pattern matcher finds AST antipatterns
     4. Type analyzer finds signature/type issues
     5. Duplicate detector finds code duplicates
-    6. RAG provides context
+    6. RAG provides context (using OpenAI embeddings)
     7. GPT organizes and adds logic/security suggestions with exact code references
     """
 
@@ -81,11 +79,11 @@ class CodeReviewer:
             pattern_matcher: Optional[PatternMatcher] = None,
             type_analyzer: Optional[TypeAnalyzer] = None,
             duplicate_detector: Optional[DuplicateDetector] = None,
-            embedding_model: str = "all-MiniLM-L6-v2",
+            embedding_model: str = "text-embedding-3-small",
             vector_db_path: str = "./chroma_db",
             skip_duplicate_detection: bool = False
     ):
-        """Initialize reviewer with all analyzers (ChromaDB optional)"""
+        """Initialize reviewer with all analyzers (ChromaDB with OpenAI embeddings)"""
         self.client = OpenAI(api_key=openai_api_key)
 
         # Initialize all analyzers
@@ -95,14 +93,14 @@ class CodeReviewer:
         self.duplicate_detector = duplicate_detector or DuplicateDetector()
         self.skip_duplicate_detection = skip_duplicate_detection
 
-        # Try to initialize SentenceTransformer (optional)
-        self.embedding_model = None
+        # Store embedding model name for OpenAI API
+        self.embedding_model_name = embedding_model
+
+        # Try to initialize ChromaDB with OpenAI embeddings
         self.chroma_available = False
         try:
-            from sentence_transformers import SentenceTransformer
             import chromadb
 
-            self.embedding_model = SentenceTransformer(embedding_model)
             self.chroma_client = chromadb.PersistentClient(path=vector_db_path)
 
             try:
@@ -116,7 +114,7 @@ class CodeReviewer:
                 self.common_issues = self.chroma_client.create_collection("common_issues")
 
             self.chroma_available = True
-            print("✅ ChromaDB initialized successfully")
+            print("✅ ChromaDB initialized with OpenAI embeddings")
 
         except (ImportError, Exception) as e:
             print(f"⚠️  ChromaDB not available: {e}")
@@ -135,6 +133,22 @@ class CodeReviewer:
             'duplicate_issues': [],
             'total_issues': 0
         }
+
+    def get_embedding(self, text: str) -> list:
+        """Get embedding using OpenAI API"""
+        try:
+            # Truncate text to avoid token limits (8191 tokens for text-embedding-3-small)
+            truncated_text = text[:8000]
+
+            response = self.client.embeddings.create(
+                model=self.embedding_model_name,
+                input=truncated_text
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            print(f"⚠️ Embedding error: {e}")
+            # Return zero vector with correct dimensions for text-embedding-3-small (1536)
+            return [0.0] * 1536
 
     def enable_codebase_analysis(self, project_root: str = "."):
         """Enable codebase-aware reviews"""
@@ -538,33 +552,45 @@ Keep it concise - this is just for context before the real analysis."""
         return deduplicated[:15]
 
     def _get_rag_context(self, code: str, top_k: int = 5) -> List[Dict]:
-        """Get relevant context from RAG"""
-        code_embedding = self.embedding_model.encode(code).tolist()
+        """Get relevant context from RAG using OpenAI embeddings"""
+        if not self.chroma_available:
+            return []
+
+        # Get embedding for the code
+        code_embedding = self.get_embedding(code)
         relevant_context = []
 
+        # Query best practices
         if self.best_practices.count() > 0:
-            results = self.best_practices.query(
-                query_embeddings=[code_embedding],
-                n_results=min(top_k, self.best_practices.count())
-            )
-            for i, doc in enumerate(results['documents'][0]):
-                relevant_context.append({
-                    "type": "best_practice",
-                    "content": doc,
-                    "metadata": results['metadatas'][0][i]
-                })
+            try:
+                results = self.best_practices.query(
+                    query_embeddings=[code_embedding],
+                    n_results=min(top_k, self.best_practices.count())
+                )
+                for i, doc in enumerate(results['documents'][0]):
+                    relevant_context.append({
+                        "type": "best_practice",
+                        "content": doc,
+                        "metadata": results['metadatas'][0][i]
+                    })
+            except Exception as e:
+                print(f"⚠️ Best practices query failed: {e}")
 
+        # Query common issues
         if self.common_issues.count() > 0:
-            results = self.common_issues.query(
-                query_embeddings=[code_embedding],
-                n_results=min(top_k, self.common_issues.count())
-            )
-            for i, doc in enumerate(results['documents'][0]):
-                relevant_context.append({
-                    "type": "common_issue",
-                    "content": doc,
-                    "metadata": results['metadatas'][0][i]
-                })
+            try:
+                results = self.common_issues.query(
+                    query_embeddings=[code_embedding],
+                    n_results=min(top_k, self.common_issues.count())
+                )
+                for i, doc in enumerate(results['documents'][0]):
+                    relevant_context.append({
+                        "type": "common_issue",
+                        "content": doc,
+                        "metadata": results['metadatas'][0][i]
+                    })
+            except Exception as e:
+                print(f"⚠️ Common issues query failed: {e}")
 
         return relevant_context
 
@@ -789,7 +815,7 @@ CRITICAL REQUIREMENTS:
     # ==================== RAG MANAGEMENT ====================
 
     def add_best_practice(self, practice: str, category: str, metadata: Dict = None):
-        """Add best practice to knowledge base"""
+        """Add best practice to knowledge base using OpenAI embeddings"""
 
         # Check if Chroma is available
         if not self.chroma_available:
@@ -800,8 +826,8 @@ CRITICAL REQUIREMENTS:
             metadata = {}
         metadata['category'] = category
 
-        # Create embedding
-        embedding = self.embedding_model.encode(practice).tolist()
+        # Create embedding using OpenAI
+        embedding = self.get_embedding(practice)
 
         # Add to best practices
         self.best_practices.add(
@@ -812,7 +838,7 @@ CRITICAL REQUIREMENTS:
         )
 
     def add_common_issue(self, issue: str, category: str, metadata: Dict = None):
-        """Add common issue to knowledge base"""
+        """Add common issue to knowledge base using OpenAI embeddings"""
 
         # Check if Chroma is available
         if not self.chroma_available:
@@ -823,8 +849,8 @@ CRITICAL REQUIREMENTS:
             metadata = {}
         metadata['category'] = category
 
-        # Create embedding
-        embedding = self.embedding_model.encode(issue).tolist()
+        # Create embedding using OpenAI
+        embedding = self.get_embedding(issue)
 
         self.common_issues.add(
             embeddings=[embedding],

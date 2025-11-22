@@ -7,6 +7,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
@@ -26,7 +27,7 @@ EXPOSE 8000
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1
-ENV ANTHROPIC_API_KEY=""
+ENV OPENAI_API_KEY=""
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

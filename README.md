@@ -106,7 +106,7 @@ cd codebase-intelligence
 # 2. Backend setup
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements-full.txt
 
 # 3. Configure API key
 cp .env.example .env
@@ -317,7 +317,7 @@ Contributions welcome! Please:
 **Development setup:**
 ```bash
 # Install dev dependencies
-pip install -r requirements.txt
+pip install -r requirements-full.txt
 black .
 flake8 .
 

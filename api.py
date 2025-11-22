@@ -1,18 +1,13 @@
-"""
-FastAPI REST API for Enhanced Modular Code Review Assistant
-WITH: Progress tracking, Database persistence, Export functionality
-"""
+# api.py - Updated to use server-side state store, removing dependency on github_auth.py's state validation
 
 import os
-
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, WebSocket, WebSocketDisconnect, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, RedirectResponse # Add RedirectResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
-import os
 import uvicorn
 from Code_reviewer import CodeReviewer
 import json
@@ -22,12 +17,27 @@ import uuid
 import shutil
 import subprocess
 from pathlib import Path
-import zipfile
 import gc
 import time
 from datetime import datetime
 import sqlite3
 from contextlib import contextmanager
+from dotenv import load_dotenv
+import secrets # Import secrets for token generation
+import httpx # Import httpx for async requests in exchange_code_for_token if needed, otherwise remove
+load_dotenv()  # loads variables from .env
+
+GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
+GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+REDIRECT_URI = f"{BACKEND_URL}/auth/github/callback"
+FRONTEND_REDIRECT_BASE = FRONTEND_URL
+
+
+# --- NEW: SERVER-SIDE STATE STORE FOR OAUTH ---
+oauth_states_store = {} # Dictionary to store state values server-side, keyed by a unique ID
+
 
 app = FastAPI(
     title="Enhanced Modular AI Code Review API",
@@ -54,7 +64,6 @@ reviewer = CodeReviewer(openai_api_key=api_key)
 # Database setup
 DB_PATH = "code_review_results.db"
 
-
 @contextmanager
 def get_db():
     """Context manager for database connections"""
@@ -64,7 +73,6 @@ def get_db():
         yield conn
     finally:
         conn.close()
-
 
 def init_database():
     """Initialize SQLite database for result persistence"""
@@ -88,25 +96,20 @@ def init_database():
         conn.commit()
     print("✅ Database initialized")
 
-
 # Initialize on startup
 @app.on_event("startup")
 async def startup_event():
     """Initialize knowledge base and codebase analysis on startup"""
     try:
         print("🚀 Initializing Enhanced Code Review System...")
-
         # Initialize database
         init_database()
-
         reviewer.initialize_knowledge_base()
         print("✅ Knowledge base initialized")
-
         reviewer.enable_codebase_analysis(".")
         print("✅ Codebase analysis enabled")
     except Exception as e:
         print(f"⚠️ Warning: Could not fully initialize system: {e}")
-
 
 # Request/Response models
 class CodeReviewRequest(BaseModel):
@@ -115,23 +118,19 @@ class CodeReviewRequest(BaseModel):
     file_path: Optional[str] = Field(None, description="File path for codebase-aware analysis")
     context: Optional[str] = Field(None, description="Additional context")
 
-
 class FileReviewRequest(BaseModel):
     file_path: str = Field(..., description="Path to file to review")
     context: Optional[str] = Field(None, description="Additional context")
-
 
 class BestPracticeRequest(BaseModel):
     practice: str = Field(..., description="Best practice description")
     category: str = Field(..., description="Category (e.g., security, performance)")
     metadata: Optional[dict] = Field(None, description="Additional metadata")
 
-
 class CommonIssueRequest(BaseModel):
     issue: str = Field(..., description="Common issue description")
     category: str = Field(..., description="Category (e.g., bugs, security)")
     metadata: Optional[dict] = Field(None, description="Additional metadata")
-
 
 class AnalysisResponse(BaseModel):
     total_verified_issues: int
@@ -142,19 +141,16 @@ class AnalysisResponse(BaseModel):
     strengths: List[str]
     recommendations: List[str]
 
-
 class GitHubRepoRequest(BaseModel):
     repo_url: str = Field(..., description="GitHub repository URL (e.g., https://github.com/user/repo)")
     branch: str = Field(default="main", description="Branch to analyze")
     files_pattern: str = Field(default="*.py", description="File pattern to analyze")
-
 
 class AnalysisJobResponse(BaseModel):
     job_id: str
     status: str
     message: str
     share_url: str  # NEW: Shareable link
-
 
 class JobStatusResponse(BaseModel):
     job_id: str
@@ -164,7 +160,6 @@ class JobStatusResponse(BaseModel):
     files_analyzed: int
     total_files: int
     results_available: bool
-
 
 # Endpoints
 @app.get("/")
@@ -206,7 +201,6 @@ async def root():
         }
     }
 
-
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
@@ -227,17 +221,14 @@ async def health_check():
         "database": "✅ Connected"
     }
 
-
 @app.get("/stats")
 async def get_stats():
     """Get comprehensive system statistics"""
     with get_db() as conn:
         cursor = conn.execute("SELECT COUNT(*) as total FROM analysis_jobs")
         total_jobs = cursor.fetchone()['total']
-
         cursor = conn.execute("SELECT COUNT(*) as completed FROM analysis_jobs WHERE status = 'completed'")
         completed_jobs = cursor.fetchone()['completed']
-
     return {
         "knowledge_base": {
             "best_practices": reviewer.best_practices.count(),
@@ -255,7 +246,6 @@ async def get_stats():
         }
     }
 
-
 @app.post("/review")
 async def review_code(request: CodeReviewRequest):
     """Comprehensive code review with all analyzers"""
@@ -266,15 +256,11 @@ async def review_code(request: CodeReviewRequest):
             file_path=request.file_path,
             context=request.context
         )
-
         if "error" in review:
             raise HTTPException(status_code=400, detail=review["error"])
-
         return review
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/review-file")
 async def review_file(request: FileReviewRequest):
@@ -283,22 +269,17 @@ async def review_file(request: FileReviewRequest):
         file_path = Path(request.file_path)
         if not file_path.exists():
             raise HTTPException(status_code=404, detail=f"File not found: {request.file_path}")
-
         with open(file_path, 'r', encoding='utf-8') as f:
             code = f.read()
-
         review = reviewer.review_code(
             code=code,
             language="python",
             file_path=request.file_path,
             context=request.context
         )
-
         return review
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/upload-review")
 async def upload_and_review(file: UploadFile = File(...), context: Optional[str] = None):
@@ -306,11 +287,9 @@ async def upload_and_review(file: UploadFile = File(...), context: Optional[str]
     try:
         content = await file.read()
         code = content.decode('utf-8')
-
         with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as tmp:
             tmp.write(code)
             tmp_path = tmp.name
-
         try:
             review = reviewer.review_code(
                 code=code,
@@ -321,10 +300,8 @@ async def upload_and_review(file: UploadFile = File(...), context: Optional[str]
             return review
         finally:
             os.unlink(tmp_path)
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/best-practices")
 async def add_best_practice(request: BestPracticeRequest):
@@ -343,7 +320,6 @@ async def add_best_practice(request: BestPracticeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.post("/common-issues")
 async def add_common_issue(request: CommonIssueRequest):
     """Add a common issue to the knowledge base"""
@@ -361,34 +337,63 @@ async def add_common_issue(request: CommonIssueRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-from github_auth import (
-    generate_oauth_url,
-    exchange_code_for_token,
-    get_user_repos,
-    get_repo_pull_requests
-)
+# Import exchange_code_for_token from github_auth (the modified version without state validation)
+from github_auth import exchange_code_for_token, get_user_repos, get_repo_pull_requests
 
 
-# OAuth endpoints
 @app.get("/auth/github")
-async def github_oauth_init():
-    """Initialize GitHub OAuth flow"""
-    return generate_oauth_url()
+def start_github_oauth(response: Response):
+    # Generate random state and state_id
+    state = secrets.token_urlsafe(16)
+    state_id = str(uuid.uuid4())
+
+    oauth_states_store[state_id] = {
+        "state": state,
+        "timestamp": time.time()
+    }
+
+    response.set_cookie(
+        key="github_oauth_state_id",
+        value=state_id,
+        httponly=True,
+        samesite="none",
+        secure=True,
+        max_age=600
+    )
+
+    oauth_url = (
+        f"https://github.com/login/oauth/authorize"
+        f"?client_id={GITHUB_CLIENT_ID}"
+        f"&redirect_uri={REDIRECT_URI}"
+        f"&state={state_id}"
+        f"&scope=repo%20read:user"
+    )
+    return {"oauth_url": oauth_url}
 
 
-@app.post("/auth/github/callback")
-async def github_oauth_callback(code: str, state: str):
-    """Handle GitHub OAuth callback"""
-    try:
-        result = exchange_code_for_token(code, state)
-        return {
-            "status": "success",
-            "user": result
-        }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+@app.get("/auth/github/callback")
+async def github_oauth_callback(code: str, state: str, request: Request, response: Response):
+    state_id_received_from_github = state
+    stored_data = oauth_states_store.get(state_id_received_from_github)
 
+    if not stored_data:
+        response.delete_cookie("github_oauth_state_id")
+        raise HTTPException(status_code=400, detail="Invalid or expired state token")
+
+    if state_id_received_from_github in oauth_states_store:
+        del oauth_states_store[state_id_received_from_github]
+    response.delete_cookie("github_oauth_state_id")
+
+    # Pass REDIRECT_URI from env
+    result = exchange_code_for_token(code, REDIRECT_URI)
+    access_token = result["access_token"]
+    username = result["username"]
+    avatar_url = result["avatar_url"]
+
+    # Use env variable for frontend URL
+    redirect_path = "/github"
+    redirect_url = f"{FRONTEND_REDIRECT_BASE}{redirect_path}?access_token={access_token}&username={username}&avatar_url={avatar_url}"
+    return RedirectResponse(url=redirect_url)
 
 @app.get("/github/repos")
 async def get_repos(access_token: str, page: int = 1):
@@ -402,7 +407,6 @@ async def get_repos(access_token: str, page: int = 1):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-
 @app.get("/github/repos/{owner}/{repo}/pulls")
 async def get_pull_requests(owner: str, repo: str, access_token: str):
     """Get pull requests for a repository"""
@@ -415,7 +419,16 @@ async def get_pull_requests(owner: str, repo: str, access_token: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+# ... (rest of your api.py endpoints remain the same) ...
+# [Keep all other endpoints like /analysis-results, /codebase-info, etc. as they were]
 
+if __name__ == "__main__":
+    uvicorn.run(
+        "api:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True
+    )
 @app.get("/analysis-results")
 async def get_last_analysis():
     """Get detailed breakdown of last analysis"""
@@ -574,6 +587,9 @@ async def analyze_github_repo_background(job_id: str, repo_url: str, branch: str
     print(f"🚀 STARTING ANALYSIS JOB: {job_id}")
     print(f"{'=' * 80}\n")
 
+    repo_dir = None
+    analysis_reviewer = None
+
     try:
         # Stage 1: Cloning (0-15%)
         update_job_status(job_id, status="running", progress=5, current_task="Cloning repository...")
@@ -613,6 +629,8 @@ async def analyze_github_repo_background(job_id: str, repo_url: str, branch: str
         )
 
         try:
+            # CRITICAL FIX: Pass repo_dir to enable_codebase_analysis
+            print(f"🔧 Building codebase graph for: {repo_dir}")
             analysis_reviewer.enable_codebase_analysis(repo_dir)
             print("✅ Codebase graph built")
         except Exception as e:
@@ -628,9 +646,13 @@ async def analyze_github_repo_background(job_id: str, repo_url: str, branch: str
 
         for i, file_path in enumerate(matching_files):
             try:
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                # Use absolute path for reading
+                absolute_file_path = file_path.resolve()
+
+                with open(absolute_file_path, 'r', encoding='utf-8', errors='ignore') as f:
                     code = f.read()
 
+                # Calculate relative path for display
                 try:
                     resolved_file = Path(os.path.realpath(file_path))
                     resolved_repo = Path(os.path.realpath(repo_dir))
@@ -655,17 +677,18 @@ async def analyze_github_repo_background(job_id: str, repo_url: str, branch: str
                 # Add small delay so progress is visible
                 await asyncio.sleep(0.2)
 
-                # Analyze
+                # CRITICAL FIX: Pass ABSOLUTE file path to review_code
+                # This ensures codebase analyzer can find the file
                 review = analysis_reviewer.review_code(
                     code=code,
                     language="python",
-                    file_path=str(file_path),
+                    file_path=str(absolute_file_path),  # ← ABSOLUTE PATH
                     context=f"GitHub repo: {repo_url}"
                 )
 
                 if "error" not in review:
                     all_results.append({
-                        "file_path": rel_path,
+                        "file_path": rel_path,  # Display relative path
                         "review": review
                     })
                     successful_files += 1
@@ -676,7 +699,7 @@ async def analyze_github_repo_background(job_id: str, repo_url: str, branch: str
 
             except Exception as e:
                 failed_files += 1
-                print(f"❌ Exception: {e}")
+                print(f"❌ Exception analyzing {file_path.name}: {e}")
                 continue
 
         # Stage 5: Finalizing (95-100%)
@@ -707,12 +730,19 @@ async def analyze_github_repo_background(job_id: str, repo_url: str, branch: str
         )
 
         # Cleanup
-        shutil.rmtree(repo_dir, ignore_errors=True)
-        del analysis_reviewer
+        if repo_dir and os.path.exists(repo_dir):
+            shutil.rmtree(repo_dir, ignore_errors=True)
+            print(f"🧹 Cleaned up: {repo_dir}")
+
+        if analysis_reviewer:
+            del analysis_reviewer
         gc.collect()
 
     except Exception as e:
         print(f"\n❌ CRITICAL ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+
         update_job_status(
             job_id,
             status="failed",
@@ -722,14 +752,13 @@ async def analyze_github_repo_background(job_id: str, repo_url: str, branch: str
 
         # Cleanup on error
         try:
-            if 'repo_dir' in locals() and os.path.exists(repo_dir):
+            if repo_dir and os.path.exists(repo_dir):
                 shutil.rmtree(repo_dir, ignore_errors=True)
-            if 'analysis_reviewer' in locals():
+            if analysis_reviewer:
                 del analysis_reviewer
             gc.collect()
-        except:
-            pass
-
+        except Exception as cleanup_error:
+            print(f"⚠️ Cleanup error: {cleanup_error}")
 
 @app.post("/github/analyze", response_model=AnalysisJobResponse)
 async def analyze_github_repo(request: GitHubRepoRequest, background_tasks: BackgroundTasks):
@@ -755,8 +784,9 @@ async def analyze_github_repo(request: GitHubRepoRequest, background_tasks: Back
             request.files_pattern
         )
 
-        # Generate shareable URL
-        share_url = f"http://localhost:3000/share/{job_id}"  # Change to your domain
+        # Generate shareable URL using environment variable or default
+        frontend_url = os.getenv("FRONTEND_URL", "https://codebase-intelligence-315uqn0ks-oussamas-projects-0724f6a8.vercel.app")
+        share_url = f"{frontend_url}/share/{job_id}"
 
         return AnalysisJobResponse(
             job_id=job_id,
@@ -767,7 +797,6 @@ async def analyze_github_repo(request: GitHubRepoRequest, background_tasks: Back
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.get("/github/status/{job_id}", response_model=JobStatusResponse)
 async def get_analysis_status(job_id: str):

@@ -1,14 +1,16 @@
+// App.js - Updated to handle backend redirect token, GitHubAuthTest removed
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './App.css';
 import GitHubAnalyzer from './components/GitHubAnalyzer';
 import AnalysisResults from './components/AnalysisResults';
 import ProgressTracker from './components/ProgressTracker';
-import GitHubAuthTest from './components/GitHubAuthTest';
+// REMOVED: import GitHubAuthTest from './components/GitHubAuthTest'; // Removed import
 import { Github, Code2, Zap, Shield } from 'lucide-react';
+import { API_URL } from './config';
 
 // Configure axios base URL
-axios.defaults.baseURL = 'http://localhost:8000';
+axios.defaults.baseURL = API_URL;
 console.log('🌐 Axios configured with baseURL:', axios.defaults.baseURL);
 
 function App() {
@@ -17,22 +19,10 @@ function App() {
   const [analysisResults, setAnalysisResults] = useState(null);
   const [githubUser, setGithubUser] = useState(null);
 
-  // Check for test mode
-  const isTestMode = window.location.pathname === '/test-auth';
+  // REMOVED: Test mode check as GitHubAuthTest is gone
+  // const isTestMode = window.location.pathname === '/test-auth';
 
-  // Handle OAuth callback
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
-    const state = urlParams.get('state');
-
-    if (code && state && window.location.pathname === '/auth/callback') {
-      console.log('🔄 Handling OAuth callback in main app');
-      handleOAuthCallback(code, state);
-    }
-  }, []);
-
-  // Check for stored auth
+  // Check for stored auth on initial load
   useEffect(() => {
     const storedToken = localStorage.getItem('github_token');
     const storedUser = localStorage.getItem('github_user');
@@ -43,34 +33,33 @@ function App() {
     }
   }, []);
 
-  const handleOAuthCallback = async (code, state) => {
-    console.log('🔄 Exchanging code for token...');
+  // NEW: Handle the redirect from backend after OAuth
+  // This looks for access_token, username, and avatar_url in the URL query params
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('access_token');
+    const username = urlParams.get('username');
+    const avatarUrl = urlParams.get('avatar_url');
 
-    try {
-      const response = await axios.post('/auth/github/callback', null, {
-        params: { code, state }
-      });
-
-      console.log('✅ OAuth callback success:', response.data);
-
-      const userData = response.data.user;
+    if (token && username) {
+      console.log('🔄 Received OAuth token from backend redirect');
+      const userData = { access_token: token, username, avatar_url: avatarUrl };
       setGithubUser(userData);
-
-      // Store in localStorage
-      localStorage.setItem('github_token', userData.access_token);
+      localStorage.setItem('github_token', token);
       localStorage.setItem('github_user', JSON.stringify(userData));
 
-      // Clean URL and go to github analyzer
-      window.history.replaceState({}, document.title, "/");
-      setCurrentView('github');
+      // Clean up the URL to remove tokens from history
+      // Use replaceState to avoid adding a new history entry
+      window.history.replaceState({}, document.title, window.location.pathname);
 
-    } catch (err) {
-      console.error('❌ OAuth callback error:', err);
-      alert('GitHub authentication failed. Please try again.');
-      window.history.replaceState({}, document.title, "/");
-      setCurrentView('home');
+      // Navigate the user to the GitHub analyzer view
+      // after successfully storing the token.
+      setCurrentView('github');
     }
-  };
+  }, []); // Empty dependency array - runs once on mount
+
+  // REMOVED: The old handleOAuthCallback function as it's no longer used
+  // REMOVED: The old useEffect looking for 'code' and 'state' as it's no longer relevant
 
   const handleGitHubLogout = () => {
     console.log('🚪 Logging out of GitHub');
@@ -79,10 +68,10 @@ function App() {
     setGithubUser(null);
   };
 
-  // If in test mode, show test component
-  if (isTestMode) {
-    return <GitHubAuthTest />;
-  }
+  // REMOVED: Test mode check and return as GitHubAuthTest is gone
+  // if (isTestMode) {
+  //   return <GitHubAuthTest />;
+  // }
 
   const handleAnalysisStart = (jobData) => {
     console.log('🎯 APP.JS - handleAnalysisStart called');
@@ -218,4 +207,4 @@ function App() {
   );
 }
 
-export default App;
+export default App

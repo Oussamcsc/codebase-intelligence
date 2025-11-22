@@ -1,7 +1,4 @@
-"""
-GitHub OAuth Integration
-Handles authentication and token management
-"""
+# github_auth.py
 
 import os
 import requests
@@ -10,39 +7,20 @@ from typing import Dict, Optional
 import secrets
 
 # Store active tokens (in production: use Redis/DB)
+# Remove state_tokens - we'll handle state validation in api.py
 active_tokens: Dict[str, str] = {}
-state_tokens: Dict[str, str] = {}
+# state_tokens: Dict[str, str] = {} # REMOVED
 
 GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
 GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
-GITHUB_REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI", "http://localhost:3000/auth/callback")
+# GITHUB_REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI") # REMOVED - we'll pass it from api.py
 
+# Remove the generate_oauth_url function as state generation/validation will be handled in api.py
+# def generate_oauth_url() -> Dict[str, str]:
+#     ...
 
-def generate_oauth_url() -> Dict[str, str]:
-    """Generate GitHub OAuth URL with state token"""
-    state = secrets.token_urlsafe(32)
-    state_tokens[state] = "pending"
-
-    oauth_url = (
-        f"https://github.com/login/oauth/authorize"
-        f"?client_id={GITHUB_CLIENT_ID}"
-        f"&redirect_uri={GITHUB_REDIRECT_URI}"
-        f"&scope=repo,read:org"
-        f"&state={state}"
-    )
-
-    return {
-        "oauth_url": oauth_url,
-        "state": state
-    }
-
-
-def exchange_code_for_token(code: str, state: str) -> Dict[str, str]:
-    """Exchange OAuth code for access token"""
-
-    # Verify state
-    if state not in state_tokens:
-        raise HTTPException(status_code=400, detail="Invalid state token")
+def exchange_code_for_token(code: str, redirect_uri: str) -> Dict[str, str]: # ADDED 'redirect_uri' parameter, REMOVED 'async'
+    """Exchange OAuth code for access token - NO state validation here"""
 
     # Exchange code for token
     response = requests.post(
@@ -52,7 +30,7 @@ def exchange_code_for_token(code: str, state: str) -> Dict[str, str]:
             "client_id": GITHUB_CLIENT_ID,
             "client_secret": GITHUB_CLIENT_SECRET,
             "code": code,
-            "redirect_uri": GITHUB_REDIRECT_URI
+            "redirect_uri": redirect_uri # Use the redirect_uri passed from api.py
         }
     )
 
@@ -75,18 +53,16 @@ def exchange_code_for_token(code: str, state: str) -> Dict[str, str]:
     user_data = user_response.json()
     username = user_data.get("login")
 
-    # Store token (keyed by username)
+    # Store token (keyed by username) - You might want to handle this differently if relying on frontend storage
     active_tokens[username] = access_token
 
-    # Clean up state
-    del state_tokens[state]
+    # No state cleanup needed here as state validation happens in api.py
 
     return {
         "username": username,
         "avatar_url": user_data.get("avatar_url"),
         "access_token": access_token  # Frontend will store this
     }
-
 
 def get_user_repos(access_token: str, page: int = 1, per_page: int = 30) -> list:
     """Get user's repositories"""

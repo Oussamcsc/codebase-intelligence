@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Download, Share2, Copy, Check } from 'lucide-react';
+import { API_URL } from '../config';
 
 const AnalysisResults = ({ results, jobId }) => {
   const [expandedIssues, setExpandedIssues] = useState(new Set());
@@ -49,11 +50,11 @@ const AnalysisResults = ({ results, jobId }) => {
 
   // Export and Share functions
   const handleExportJSON = () => {
-    window.open(`http://localhost:8000/github/export/${jobId}/json`, '_blank');
-  };
+    window.open(`${API_URL}/github/export/${jobId}/json`, '_blank');
+};
 
-  const handleCopyShareLink = async () => {
-    const shareLink = `http://localhost:8000/github/share/${jobId}`;
+const handleCopyShareLink = async () => {
+  const shareLink = `${API_URL}/github/share/${jobId}`;
     try {
       await navigator.clipboard.writeText(shareLink);
       setCopiedLink(true);

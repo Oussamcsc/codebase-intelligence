@@ -1,15 +1,10 @@
-# Core API
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pydantic==2.10.3
-
-# Configuration
 python-dotenv==1.0.1
-
-# AI & HTTP
 openai==1.57.4
 requests==2.32.3
 httpx==0.28.1
-
-# File handling
 python-multipart==0.0.12
+# Vector Database (lightweight!)
+chromadb==0.5.23
