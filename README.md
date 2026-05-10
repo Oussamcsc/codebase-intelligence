@@ -18,6 +18,20 @@
 
 ---
 
+## Project Snapshot
+
+Code Intel is a portfolio-grade developer tool focused on repository understanding and AI-assisted code review. It demonstrates backend architecture, static analysis, graph algorithms, retrieval-augmented generation, LLM orchestration, and a deployed full-stack user experience.
+
+**Core engineering areas:**
+- Repository ingestion through the GitHub API
+- AST/static analysis for structural code understanding
+- Directed graph traversal for circular dependency detection
+- Vector retrieval with ChromaDB for context-aware analysis
+- Multi-agent review workflows for security, performance, and architecture feedback
+- FastAPI backend with React frontend and deployment-ready configuration
+
+---
+
 ## 🎯 What is Code Intel?
 
 Code Intel is an intelligent code analysis platform that combines **static analysis**, **AST parsing**, and **LLM reasoning** to help developers understand complex codebases, identify issues, and improve code quality—all in real-time.
@@ -90,8 +104,8 @@ Download comprehensive analysis reports as JSON for further processing or sharin
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/code-intel.git
-cd code-intel
+git clone https://github.com/Oussamcsc/codebase-intelligence.git
+cd codebase-intelligence
 ```
 
 ### 2. Backend Setup
