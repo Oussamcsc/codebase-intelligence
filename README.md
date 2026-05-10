@@ -316,8 +316,8 @@ python api.py
 
 ### Getting Help
 
-- 📧 Open an [issue](https://github.com/yourusername/code-intel/issues)
-- 💬 Check existing [discussions](https://github.com/yourusername/code-intel/discussions)
+- 📧 Open an [issue](https://github.com/Oussamcsc/codebase-intelligence/issues)
+- 💬 Check existing [discussions](https://github.com/Oussamcsc/codebase-intelligence/discussions)
 - 🐛 Submit bug reports with logs and repo details
 
 ---
