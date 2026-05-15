@@ -36,8 +36,15 @@ env/
 # Environment variables
 .env
 
+# Dependencies / generated data
+node_modules/
+web/node_modules/
+chroma_db/
+
 # Vector DB
 *.db
+*.sqlite
+*.sqlite3
 *.parquet
 
 # Logs
