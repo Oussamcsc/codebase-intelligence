@@ -22,17 +22,21 @@ import time
 from datetime import datetime
 import sqlite3
 from contextlib import contextmanager
-from dotenv import load_dotenv
 import secrets # Import secrets for token generation
 import httpx # Import httpx for async requests in exchange_code_for_token if needed, otherwise remove
-load_dotenv()  # loads variables from .env
-
-GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
-GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
-REDIRECT_URI = f"{BACKEND_URL}/auth/github/callback"
-FRONTEND_REDIRECT_BASE = FRONTEND_URL
+from config import (
+    API_HOST,
+    API_PORT,
+    DB_PATH,
+    EMBEDDING_MODEL,
+    FRONTEND_REDIRECT_BASE,
+    FRONTEND_URL,
+    GITHUB_CLIENT_ID,
+    GITHUB_CLIENT_SECRET,
+    OPENAI_API_KEY,
+    REDIRECT_URI,
+    VECTOR_DB_PATH,
+)
 
 
 # --- NEW: SERVER-SIDE STATE STORE FOR OAUTH ---
@@ -55,14 +59,14 @@ app.add_middleware(
 )
 
 # Initialize comprehensive code reviewer
-api_key = os.getenv("OPENAI_API_KEY")
-if not api_key:
+if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY environment variable required")
 
-reviewer = CodeReviewer(openai_api_key=api_key)
-
-# Database setup
-DB_PATH = "code_review_results.db"
+reviewer = CodeReviewer(
+    openai_api_key=OPENAI_API_KEY,
+    embedding_model=EMBEDDING_MODEL,
+    vector_db_path=VECTOR_DB_PATH,
+)
 
 @contextmanager
 def get_db():
@@ -419,16 +423,6 @@ async def get_pull_requests(owner: str, repo: str, access_token: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-# ... (rest of your api.py endpoints remain the same) ...
-# [Keep all other endpoints like /analysis-results, /codebase-info, etc. as they were]
-
-if __name__ == "__main__":
-    uvicorn.run(
-        "api:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True
-    )
 @app.get("/analysis-results")
 async def get_last_analysis():
     """Get detailed breakdown of last analysis"""
@@ -785,8 +779,7 @@ async def analyze_github_repo(request: GitHubRepoRequest, background_tasks: Back
         )
 
         # Generate shareable URL using environment variable or default
-        frontend_url = os.getenv("FRONTEND_URL", "https://codebase-intelligence-315uqn0ks-oussamas-projects-0724f6a8.vercel.app")
-        share_url = f"{frontend_url}/share/{job_id}"
+        share_url = f"{FRONTEND_URL}/share/{job_id}"
 
         return AnalysisJobResponse(
             job_id=job_id,
@@ -961,7 +954,7 @@ async def cleanup_job(job_id: str):
 if __name__ == "__main__":
     uvicorn.run(
         "api:app",
-        host="0.0.0.0",
-        port=8000,
+        host=API_HOST,
+        port=API_PORT,
         reload=True
     )

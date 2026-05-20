@@ -85,7 +85,7 @@ def test_system():
     print("1. Set your OPENAI_API_KEY environment variable")
     print("2. Run: python scan_project.py")
     print("3. Or run: python cli.py review --help")
-    print("4. Or start the API: python api.py")
+    print("4. Or start the API: uvicorn api:app --host 0.0.0.0 --port 8000 --reload")
 
 if __name__ == "__main__":
     test_system()

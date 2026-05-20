@@ -3,7 +3,8 @@ Tests for Code Review Assistant
 """
 
 import pytest
-from Enhanced_code_review_assistant import CodeReviewAssistant, format_review_output
+from Code_reviewer import CodeReviewer
+from scan_project import format_comprehensive_review_output
 import os
 
 # Sample code for testing
@@ -34,15 +35,17 @@ def process_data(data):
 
 
 @pytest.fixture
-def assistant():
+def assistant(monkeypatch):
     """Create a code review assistant instance for testing"""
-    api_key = os.getenv("ANTHROPIC_API_KEY", "test-key")
-    return CodeReviewAssistant(api_key)
+    api_key = os.getenv("OPENAI_API_KEY", "test-key")
+    reviewer = CodeReviewer(api_key)
+    monkeypatch.setattr(reviewer, "get_embedding", lambda _text: [0.0] * 1536)
+    return reviewer
 
 
 def test_analyze_code_structure_good(assistant):
     """Test structure analysis on well-formed code"""
-    analysis = assistant.analyze_code_structure(SAMPLE_GOOD_CODE)
+    analysis = assistant._analyze_code_structure(SAMPLE_GOOD_CODE)
     
     assert "error" not in analysis
     assert len(analysis["functions"]) == 1
@@ -53,7 +56,7 @@ def test_analyze_code_structure_good(assistant):
 def test_analyze_code_structure_bad_syntax(assistant):
     """Test structure analysis on code with syntax errors"""
     bad_code = "def broken(\n    pass"
-    analysis = assistant.analyze_code_structure(bad_code)
+    analysis = assistant._analyze_code_structure(bad_code)
     
     assert "error" in analysis
 
@@ -115,9 +118,9 @@ def test_format_review_output():
         }
     }
     
-    output = format_review_output(review)
+    output = format_comprehensive_review_output(review)
     
-    assert "CODE REVIEW REPORT" in output
+    assert "SENIOR SOFTWARE ENGINEER CODE REVIEW" in output
     assert "7/10" in output
     assert "Test issue" in output
     assert "Good documentation" in output
@@ -126,8 +129,8 @@ def test_format_review_output():
 @pytest.mark.asyncio
 async def test_review_simple_code(assistant):
     """Test reviewing simple code (requires API key)"""
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        pytest.skip("ANTHROPIC_API_KEY not set")
+    if not os.getenv("OPENAI_API_KEY"):
+        pytest.skip("OPENAI_API_KEY not set")
     
     review = assistant.review_code(
         code=SAMPLE_GOOD_CODE,
@@ -143,7 +146,7 @@ async def test_review_simple_code(assistant):
 
 def test_get_relevant_context_empty(assistant):
     """Test getting relevant context when DB is empty"""
-    context = assistant.get_relevant_context("print('hello')")
+    context = assistant._get_rag_context("print('hello')")
     
     # Should return empty list if DB is empty
     assert isinstance(context, list)

@@ -42,6 +42,7 @@ web/node_modules/
 chroma_db/
 
 # Vector DB
+chroma_db/
 *.db
 *.sqlite
 *.sqlite3
@@ -67,3 +68,6 @@ models/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Node
+node_modules/

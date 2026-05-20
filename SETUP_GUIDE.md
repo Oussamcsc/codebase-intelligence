@@ -87,11 +87,11 @@ pytest -v
 
 ```python
 # Create custom_knowledge.py
-from Enhanced_code_review_assistant import CodeReviewAssistant
+from Code_reviewer import CodeReviewer
 import os
 
-api_key = os.getenv("ANTHROPIC_API_KEY")
-assistant = CodeReviewAssistant(api_key)
+api_key = os.getenv("OPENAI_API_KEY")
+assistant = CodeReviewer(api_key)
 
 # Add your own domain-specific practices
 assistant.add_best_practice(
@@ -161,7 +161,7 @@ railway up
 
 **Option B: Render.com** (Easy, Free tier)
 1. Connect GitHub repo
-2. Add environment variable: ANTHROPIC_API_KEY
+2. Add environment variable: OPENAI_API_KEY
 3. Deploy (automatic from Dockerfile)
 
 **Option C: AWS EC2** (Most professional)

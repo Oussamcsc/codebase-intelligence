@@ -1,1 +1,4 @@
 .vercel
+node_modules/
+chroma_db/
+*.db

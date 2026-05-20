@@ -8,3 +8,5 @@ httpx==0.28.1
 python-multipart==0.0.12
 # Vector Database (lightweight!)
 chromadb==0.5.23
+pytest==8.3.4
+mypy==1.14.1
