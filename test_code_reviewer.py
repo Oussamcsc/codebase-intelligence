@@ -113,8 +113,8 @@ def test_format_review_output():
         "recommendations": ["Add type hints"],
         "structure_analysis": {
             "lines": 10,
-            "functions": 1,
-            "classes": 0
+            "functions": [{"name": "calculate_sum", "lineno": 1, "has_docstring": True}],
+            "classes": []
         }
     }
     
