@@ -24,6 +24,8 @@ DB_PATH = os.getenv("DB_PATH", "code_review_results.db")
 
 # Vector database / model settings
 VECTOR_DB_PATH = os.getenv("VECTOR_DB_PATH", "./chroma_db")
+CHROMA_HOST = os.getenv("CHROMA_HOST", "")
+CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8000"))
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 
 # Analysis behavior

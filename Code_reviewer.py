@@ -81,6 +81,8 @@ class CodeReviewer:
             duplicate_detector: Optional[DuplicateDetector] = None,
             embedding_model: str = "text-embedding-3-small",
             vector_db_path: str = "./chroma_db",
+            chroma_host: str = "",
+            chroma_port: int = 8000,
             skip_duplicate_detection: bool = False,
             analysis_mode: str = "fast",
             enable_rag: bool = True,
@@ -111,7 +113,10 @@ class CodeReviewer:
             try:
                 import chromadb
 
-                self.chroma_client = chromadb.PersistentClient(path=vector_db_path)
+                if chroma_host:
+                    self.chroma_client = chromadb.HttpClient(host=chroma_host, port=chroma_port)
+                else:
+                    self.chroma_client = chromadb.PersistentClient(path=vector_db_path)
 
                 try:
                     self.best_practices = self.chroma_client.get_collection("best_practices")
