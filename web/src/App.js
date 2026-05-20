@@ -33,13 +33,15 @@ function App() {
     }
   }, []);
 
-  // NEW: Handle the redirect from backend after OAuth
-  // This looks for access_token, username, and avatar_url in the URL query params
+  // Handle the redirect from backend after OAuth.
+  // Prefer URL fragment params so tokens are not sent to Nginx access logs;
+  // keep query param parsing for compatibility with older redirects.
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('access_token');
-    const username = urlParams.get('username');
-    const avatarUrl = urlParams.get('avatar_url');
+    const queryParams = new URLSearchParams(window.location.search);
+    const fragmentParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const token = fragmentParams.get('access_token') || queryParams.get('access_token');
+    const username = fragmentParams.get('username') || queryParams.get('username');
+    const avatarUrl = fragmentParams.get('avatar_url') || queryParams.get('avatar_url');
 
     if (token && username) {
       console.log('🔄 Received OAuth token from backend redirect');
@@ -48,12 +50,10 @@ function App() {
       localStorage.setItem('github_token', token);
       localStorage.setItem('github_user', JSON.stringify(userData));
 
-      // Clean up the URL to remove tokens from history
-      // Use replaceState to avoid adding a new history entry
-      window.history.replaceState({}, document.title, window.location.pathname);
+      // Clean up the URL to remove tokens from history and address bar.
+      window.history.replaceState({}, document.title, '/');
 
-      // Navigate the user to the GitHub analyzer view
-      // after successfully storing the token.
+      // Navigate the user to the GitHub analyzer view after storing auth.
       setCurrentView('github');
     }
   }, []); // Empty dependency array - runs once on mount

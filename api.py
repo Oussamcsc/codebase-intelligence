@@ -449,14 +449,15 @@ async def github_oauth_callback(code: str, state: str, request: Request, respons
     username = result["username"]
     avatar_url = result["avatar_url"]
 
-    # Use env variable for frontend URL
+    # Use URL fragment so the access token is handled client-side and is not
+    # written to frontend server access logs.
     redirect_path = "/github"
     redirect_params = urlencode({
         "access_token": access_token,
         "username": username,
         "avatar_url": avatar_url or "",
     })
-    redirect_url = f"{FRONTEND_REDIRECT_BASE}{redirect_path}?{redirect_params}"
+    redirect_url = f"{FRONTEND_REDIRECT_BASE}{redirect_path}#{redirect_params}"
     return RedirectResponse(url=redirect_url)
 
 @app.get("/github/repos")
