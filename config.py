@@ -15,6 +15,7 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 REDIRECT_URI = f"{BACKEND_URL}/auth/github/callback"
 FRONTEND_REDIRECT_BASE = FRONTEND_URL
+OAUTH_COOKIE_SECURE = BACKEND_URL.startswith("https://")
 
 # Runtime settings
 API_HOST = os.getenv("API_HOST", "0.0.0.0")

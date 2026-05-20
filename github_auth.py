@@ -1,19 +1,16 @@
 # github_auth.py
 
-import os
 import requests
 from fastapi import HTTPException
 from typing import Dict, Optional
-import secrets
+from config import GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
 
 # Store active tokens (in production: use Redis/DB)
 # Remove state_tokens - we'll handle state validation in api.py
 active_tokens: Dict[str, str] = {}
 # state_tokens: Dict[str, str] = {} # REMOVED
 
-GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
-GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
-# GITHUB_REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI") # REMOVED - we'll pass it from api.py
+# GITHUB_REDIRECT_URI is passed from api.py so it stays aligned with BACKEND_URL.
 
 # Remove the generate_oauth_url function as state generation/validation will be handled in api.py
 # def generate_oauth_url() -> Dict[str, str]:
@@ -21,6 +18,12 @@ GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
 
 def exchange_code_for_token(code: str, redirect_uri: str) -> Dict[str, str]: # ADDED 'redirect_uri' parameter, REMOVED 'async'
     """Exchange OAuth code for access token - NO state validation here"""
+
+    if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
+        raise HTTPException(
+            status_code=500,
+            detail="GitHub OAuth is not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in .env."
+        )
 
     # Exchange code for token
     response = requests.post(
@@ -31,24 +34,32 @@ def exchange_code_for_token(code: str, redirect_uri: str) -> Dict[str, str]: # A
             "client_secret": GITHUB_CLIENT_SECRET,
             "code": code,
             "redirect_uri": redirect_uri # Use the redirect_uri passed from api.py
-        }
+        },
+        timeout=15,
     )
 
     if response.status_code != 200:
-        raise HTTPException(status_code=400, detail="Failed to exchange code for token")
+        raise HTTPException(status_code=400, detail=f"Failed to exchange code for token: {response.text}")
 
     data = response.json()
 
     if "error" in data:
         raise HTTPException(status_code=400, detail=data.get("error_description", "OAuth error"))
 
+    if "access_token" not in data:
+        raise HTTPException(status_code=400, detail="GitHub OAuth response did not include an access token")
+
     access_token = data["access_token"]
 
     # Get user info
     user_response = requests.get(
         "https://api.github.com/user",
-        headers={"Authorization": f"token {access_token}"}
+        headers={"Authorization": f"token {access_token}"},
+        timeout=15,
     )
+
+    if user_response.status_code != 200:
+        raise HTTPException(status_code=400, detail="Failed to fetch GitHub user profile")
 
     user_data = user_response.json()
     username = user_data.get("login")
@@ -75,7 +86,8 @@ def get_user_repos(access_token: str, page: int = 1, per_page: int = 30) -> list
             "per_page": per_page,
             "sort": "updated",
             "affiliation": "owner,collaborator"
-        }
+        },
+        timeout=15,
     )
 
     if response.status_code != 200:
@@ -106,7 +118,8 @@ def get_repo_pull_requests(access_token: str, repo_full_name: str, state: str = 
     response = requests.get(
         f"https://api.github.com/repos/{repo_full_name}/pulls",
         headers={"Authorization": f"token {access_token}"},
-        params={"state": state}
+        params={"state": state},
+        timeout=15,
     )
 
     if response.status_code != 200:

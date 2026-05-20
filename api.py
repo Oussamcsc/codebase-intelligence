@@ -17,6 +17,7 @@ import uuid
 import shutil
 import subprocess
 from pathlib import Path
+from urllib.parse import urlencode
 import gc
 import time
 from datetime import datetime
@@ -34,6 +35,7 @@ from config import (
     GITHUB_CLIENT_ID,
     GITHUB_CLIENT_SECRET,
     OPENAI_API_KEY,
+    OAUTH_COOKIE_SECURE,
     REDIRECT_URI,
     VECTOR_DB_PATH,
 )
@@ -347,6 +349,12 @@ from github_auth import exchange_code_for_token, get_user_repos, get_repo_pull_r
 
 @app.get("/auth/github")
 def start_github_oauth(response: Response):
+    if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
+        raise HTTPException(
+            status_code=500,
+            detail="GitHub OAuth is not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in .env."
+        )
+
     # Generate random state and state_id
     state = secrets.token_urlsafe(16)
     state_id = str(uuid.uuid4())
@@ -360,18 +368,18 @@ def start_github_oauth(response: Response):
         key="github_oauth_state_id",
         value=state_id,
         httponly=True,
-        samesite="none",
-        secure=True,
+        samesite="none" if OAUTH_COOKIE_SECURE else "lax",
+        secure=OAUTH_COOKIE_SECURE,
         max_age=600
     )
 
-    oauth_url = (
-        f"https://github.com/login/oauth/authorize"
-        f"?client_id={GITHUB_CLIENT_ID}"
-        f"&redirect_uri={REDIRECT_URI}"
-        f"&state={state_id}"
-        f"&scope=repo%20read:user"
-    )
+    oauth_params = urlencode({
+        "client_id": GITHUB_CLIENT_ID,
+        "redirect_uri": REDIRECT_URI,
+        "state": state_id,
+        "scope": "repo read:user",
+    })
+    oauth_url = f"https://github.com/login/oauth/authorize?{oauth_params}"
     return {"oauth_url": oauth_url}
 
 
@@ -396,7 +404,12 @@ async def github_oauth_callback(code: str, state: str, request: Request, respons
 
     # Use env variable for frontend URL
     redirect_path = "/github"
-    redirect_url = f"{FRONTEND_REDIRECT_BASE}{redirect_path}?access_token={access_token}&username={username}&avatar_url={avatar_url}"
+    redirect_params = urlencode({
+        "access_token": access_token,
+        "username": username,
+        "avatar_url": avatar_url or "",
+    })
+    redirect_url = f"{FRONTEND_REDIRECT_BASE}{redirect_path}?{redirect_params}"
     return RedirectResponse(url=redirect_url)
 
 @app.get("/github/repos")
@@ -618,7 +631,9 @@ async def analyze_github_repo_background(job_id: str, repo_url: str, branch: str
         await asyncio.sleep(0.3)
 
         analysis_reviewer = CodeReviewer(
-            openai_api_key=api_key,
+            openai_api_key=OPENAI_API_KEY,
+            embedding_model=EMBEDDING_MODEL,
+            vector_db_path=VECTOR_DB_PATH,
             skip_duplicate_detection=is_large_repo
         )
 
