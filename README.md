@@ -2,46 +2,52 @@
 
 # Codebase Intelligence
 
-### AI-powered repository analysis and senior-review assistant
+### Find the code risks that matter before they become production problems.
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-18+-61DAFB.svg)](https://react.dev/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://docs.docker.com/compose/)
+[![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector%20Store-5B5BD6.svg)](https://www.trychroma.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-[Quick Start](#quick-start) · [Architecture](#architecture) · [Configuration](#configuration) · [API](#api-surface) · [Troubleshooting](#troubleshooting)
+[Quick Start](#quick-start) · [Features](#features) · [Architecture](#architecture) · [Configuration](#configuration) · [API](#api-surface)
 
 </div>
 
 ---
 
-## Project snapshot
+## Why this exists
 
-Codebase Intelligence is a full-stack developer tool for understanding repositories and producing grounded AI-assisted code review. It combines static analysis, dependency/call-graph inspection, duplicate and type-signal detection, optional retrieval-augmented review context, and OpenAI review synthesis to identify the issues a senior engineer should inspect first.
+Most AI code review tools sound confident while drowning teams in generic advice. **Codebase Intelligence is built for the opposite:** fast repository understanding, static-analysis evidence, calibrated severity, and review output that helps developers decide what to inspect next.
 
-It is built to answer practical engineering questions:
+Point it at a GitHub repo and get a senior-review style snapshot: purpose, quality score, risk categories, file summaries, exportable JSON, share links, and concrete issues tied back to code evidence.
 
-- Which files, functions, or dependencies are risky?
-- Where are maintainability, correctness, performance, or security problems likely hiding?
-- Which findings are backed by static-analysis evidence instead of generic LLM advice?
-- How can a repository review be shared, exported, and revisited later?
+If you are evaluating a codebase, cleaning up a repo for production, or preparing an engineering portfolio project, this is the fastest way to get from “what is in here?” to “what should I fix first?”
+
+![Codebase Intelligence home screen](docs/assets/home-hero.png)
 
 ---
 
-## Core capabilities
+## Features
 
-- **GitHub repository ingestion** from public repository URLs.
-- **AST/static analysis** for structure, complexity, suspicious patterns, and file/function metadata.
-- **Dependency and impact analysis** through custom graph inspection.
-- **Duplicate-code detection** with concrete file-level references.
-- **Type-signal analysis** with optional mypy-oriented checks.
-- **Configurable review modes** for latency control: fast mode by default, detailed mode when deeper review is worth the extra cost.
-- **Noise filtering and severity calibration** to suppress low-value review comments and prioritize actionable issues.
-- **Optional RAG context** backed by ChromaDB and OpenAI embeddings.
-- **Persistent analysis jobs** using SQLite for job status and results.
-- **FastAPI backend + React frontend** with WebSocket progress updates, result sharing, and JSON export.
-- **Containerized local stack** with Docker Compose for repeatable setup.
+- **Repository-level analysis** from public GitHub URLs or authenticated GitHub repo selection.
+- **Four specialized analyzers**: dependency/impact graph, AST pattern matching, type-signal checks, and duplicate detection.
+- **Fast review mode** optimized for local iteration: one repository-level LLM pass after static evidence collection.
+- **Severity calibration and noise filtering** to reduce generic comments and focus on correctness, stability, performance, and maintainability.
+- **Progressive UI workflow** with URL input, GitHub OAuth, repository picker, live progress, result dashboard, JSON export, and share links.
+- **Optional RAG context** with ChromaDB + OpenAI embeddings for deeper review guidance.
+- **Containerized full stack**: FastAPI, React/Nginx, ChromaDB sidecar, SQLite persistence, named Docker volumes, and a private bridge network.
+
+| Analyze by URL | Connect GitHub |
+|---|---|
+| ![Paste a GitHub URL for analysis](docs/assets/paste-url-analysis.png) | ![Connect GitHub OAuth](docs/assets/github-oauth-connect.png) |
+
+| Pick repositories | Review results |
+|---|---|
+| ![Authenticated GitHub repository picker](docs/assets/github-repo-picker.png) | ![Repository review findings](docs/assets/repository-review.png) |
+
+![Repository analysis dashboard](docs/assets/results-dashboard.png)
 
 ---
 
@@ -51,38 +57,38 @@ It is built to answer practical engineering questions:
 
 This is the primary setup path. It starts the complete local ecosystem:
 
-- FastAPI API server on <http://localhost:8000>
-- React web UI served by Nginx on <http://localhost:3000>
-- ChromaDB sidecar on <http://localhost:8001>
-- Persistent Docker volumes for SQLite analysis results and Chroma data
-- A private Docker network connecting the services
+| Service | URL | Purpose |
+|---|---|---|
+| Web UI | <http://localhost:3000> | React app served by Nginx |
+| API | <http://localhost:8000> | FastAPI analysis backend |
+| ChromaDB | <http://localhost:8001> | Optional RAG/vector sidecar |
 
 #### Prerequisites
 
 - Docker Desktop or Docker Engine with Docker Compose v2
 - A valid OpenAI API key
-- GitHub OAuth credentials only if you want authenticated GitHub browsing; manual public repo URL analysis works without OAuth.
+- GitHub OAuth credentials only if you want authenticated GitHub browsing. Manual public repo URL analysis works without OAuth.
 
-#### 1. Clone the repository
+#### 1. Clone
 
 ```bash
 git clone https://github.com/Oussamcsc/codebase-intelligence.git
 cd codebase-intelligence
 ```
 
-#### 2. Create your environment file
+#### 2. Configure environment
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and set at minimum:
+Set at minimum:
 
 ```env
 OPENAI_API_KEY=your-openai-api-key-here
 ```
 
-Optional GitHub OAuth configuration:
+Optional GitHub OAuth:
 
 ```env
 GITHUB_CLIENT_ID=your-github-client-id-here
@@ -94,7 +100,7 @@ For local OAuth, configure your GitHub OAuth App with:
 - Homepage URL: `http://localhost:3000`
 - Authorization callback URL: `http://localhost:8000/auth/github/callback`
 
-#### 3. Start the stack
+#### 3. Run
 
 ```bash
 docker compose up --build
@@ -102,24 +108,20 @@ docker compose up --build
 
 Open <http://localhost:3000>.
 
-Useful checks:
+#### 4. Health checks
 
 ```bash
 curl http://localhost:8000/health
 curl http://localhost:8001/api/v1/heartbeat
 ```
 
-#### 4. Stop or reset the stack
-
-Stop containers while keeping persisted data:
+#### 5. Stop / reset
 
 ```bash
+# Stop containers, keep data
 docker compose down
-```
 
-Remove containers and local Docker volumes:
-
-```bash
+# Stop containers and remove local Docker volumes
 docker compose down -v
 ```
 
@@ -127,15 +129,7 @@ docker compose down -v
 
 ### Option 2: Local development without Docker
 
-Use this only when you are actively developing outside containers.
-
-Prerequisites:
-
-- Python 3.11+
-- Node.js 18+
-- OpenAI API key
-
-Backend:
+Use this when actively developing outside containers.
 
 ```bash
 python3 -m venv .venv
@@ -143,12 +137,10 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 cp .env.example .env
-# Edit .env and set OPENAI_API_KEY.
-
 uvicorn api:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Frontend, in a second terminal:
+In a second terminal:
 
 ```bash
 cd web
@@ -158,7 +150,7 @@ npm start
 
 Open <http://localhost:3000>.
 
-If your Python installation cannot create or seed virtual environments, `uv` works well:
+If local Python virtualenv setup is broken, use `uv`:
 
 ```bash
 uv python install 3.11
@@ -172,65 +164,59 @@ uv pip install -r requirements.txt
 ## Architecture
 
 ```text
-┌──────────────────────────────────────────────────────────────────┐
-│                    Codebase Intelligence                          │
-└──────────────────────────────────────────────────────────────────┘
-
-        Browser
-          │
-          ▼
-┌──────────────────┐        HTTP / WebSocket        ┌──────────────────┐
-│ React + Nginx    │ ─────────────────────────────► │ FastAPI API       │
-│ localhost:3000   │ ◄───────────────────────────── │ localhost:8000    │
-└──────────────────┘                                └───────┬──────────┘
-                                                            │
-                         ┌──────────────────────────────────┼──────────────────────────────────┐
-                         │                                  │                                  │
-                         ▼                                  ▼                                  ▼
-              ┌──────────────────┐              ┌──────────────────┐              ┌──────────────────┐
-              │ OpenAI APIs      │              │ ChromaDB Sidecar │              │ SQLite Volume    │
-              │ review + embed   │              │ localhost:8001   │              │ /app/data/*.db   │
-              └──────────────────┘              └──────────────────┘              └──────────────────┘
+Browser
+  │
+  ▼
+React + Nginx (:3000)
+  │ HTTP / WebSocket
+  ▼
+FastAPI API (:8000)
+  ├─ Static analyzers: graph, AST patterns, types, duplicates
+  ├─ SQLite results DB: /app/data/code_review_results.db
+  ├─ ChromaDB sidecar: chroma:8000 / localhost:8001
+  └─ OpenAI: review synthesis + optional embeddings
 ```
 
-### Runtime flow
+### Analysis pipeline
 
-1. **Repository clone** — the API clones a public GitHub repository into a temporary workspace.
-2. **File discovery** — files are filtered by pattern and `MAX_ANALYSIS_FILES` for latency control.
-3. **Static analysis** — analyzers inspect AST structure, dependency/call graph signals, type hints, duplicate code, and suspicious patterns.
-4. **Quality filtering** — generic noise is suppressed or downgraded so output emphasizes actionable risks.
-5. **Optional RAG lookup** — when `ENABLE_RAG=true`, the API retrieves review context from ChromaDB using OpenAI embeddings.
-6. **Review synthesis** — OpenAI produces a structured review from analyzer evidence, configured by `ANALYSIS_MODE`, `GPT_REVIEW_MODEL`, and timeout settings.
-7. **Persistence and streaming** — SQLite stores job state/results while WebSocket progress updates stream to the frontend.
+1. Clone the target GitHub repository into a temporary workspace.
+2. Discover files and apply `files_pattern` / `MAX_ANALYSIS_FILES` guardrails.
+3. Run static analyzers for graph, AST, type, duplicate, and file-level evidence.
+4. Filter and rank candidate issues by impact.
+5. Optionally retrieve Chroma-backed RAG guidance when `ENABLE_RAG=true`.
+6. Run a repository-level OpenAI review synthesis pass.
+7. Store job state/results in SQLite and stream progress to the UI.
 
-### Recent performance and quality optimizations
+---
 
-- **Fast mode by default**: `ANALYSIS_MODE=fast` and `GPT_REVIEW_MODEL=gpt-4o-mini` reduce local latency and cost for normal repository checks.
-- **Configurable depth**: `analysis_mode` can be set per request, and defaults can be changed through environment variables.
-- **File-count guardrails**: `MAX_ANALYSIS_FILES` protects local runs from accidentally analyzing very large repositories.
-- **Optional RAG startup**: `ENABLE_RAG=false` by default keeps the API responsive even before the Chroma knowledge base is needed.
-- **Lazy reviewer initialization**: health/config endpoints remain available even when credentials are missing, while analysis endpoints clearly report missing `OPENAI_API_KEY`.
-- **Persistent container paths**: Docker stores SQLite and Chroma data under named volumes, avoiding accidental loss across container restarts.
-- **Hardened OAuth config**: callback and frontend redirects derive from `BACKEND_URL` and `FRONTEND_URL`, reducing redirect mismatch bugs.
+## Performance optimizations
+
+- **Fast mode by default**: `ANALYSIS_MODE=fast` uses a single repository-level LLM call after evidence collection.
+- **Latency guardrails**: `MAX_ANALYSIS_FILES=40` prevents accidental long-running local scans.
+- **Cheaper default model**: `GPT_REVIEW_MODEL=gpt-4o-mini` keeps local review runs practical.
+- **Optional RAG startup**: `ENABLE_RAG=false` keeps cold starts fast; Chroma remains available when deeper context is needed.
+- **Lazy reviewer initialization**: health/config endpoints work even before `OPENAI_API_KEY` is configured.
+- **Docker persistence**: named volumes keep SQLite and Chroma data across restarts.
+- **SPA-safe OAuth redirects**: Nginx serves React routes correctly, and OAuth tokens are handled in URL fragments instead of frontend access logs.
 
 ---
 
 ## Configuration
 
-`.env.example` is the source template for local Docker and non-Docker runs.
+`.env.example` is the source template for Docker and non-Docker runs.
 
 | Variable | Default | Purpose |
 |---|---:|---|
 | `OPENAI_API_KEY` | placeholder | Required for analysis and OpenAI review synthesis. |
-| `GITHUB_CLIENT_ID` | empty/placeholder | Optional GitHub OAuth app client ID. |
-| `GITHUB_CLIENT_SECRET` | empty/placeholder | Optional GitHub OAuth app secret. |
-| `BACKEND_URL` | `http://localhost:8000` | Public URL used for API links and OAuth callback construction. |
+| `GITHUB_CLIENT_ID` | empty | Optional GitHub OAuth app client ID. |
+| `GITHUB_CLIENT_SECRET` | empty | Optional GitHub OAuth app secret. |
+| `BACKEND_URL` | `http://localhost:8000` | Public API URL used for links and OAuth callback construction. |
 | `FRONTEND_URL` | `http://localhost:3000` | Public web UI URL used for redirects. |
 | `REACT_APP_API_URL` | `http://localhost:8000` | API URL baked into the frontend Docker build. |
 | `API_HOST` | `0.0.0.0` | API bind host inside the container/process. |
 | `API_PORT` | `8000` | API bind port inside the container/process. |
 | `DB_PATH` | `/app/data/code_review_results.db` | SQLite results database path in Docker. |
-| `VECTOR_DB_PATH` | `/app/data/chroma_db` | Local embedded Chroma path for non-sidecar fallback/dev use. |
+| `VECTOR_DB_PATH` | `/app/data/chroma_db` | Embedded Chroma path for non-sidecar fallback/dev use. |
 | `CHROMA_HOST` | `chroma` | Chroma sidecar hostname on the Docker network. |
 | `CHROMA_PORT` | `8000` | Chroma sidecar internal port. Host maps this to `8001`. |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | OpenAI embedding model for optional RAG. |
@@ -251,7 +237,7 @@ Never commit `.env`, generated SQLite files, Chroma data, virtual environments, 
 
 | Service | Container | Host port | Description |
 |---|---|---:|---|
-| `api` | `codebase-intelligence-api` | `8000` | FastAPI backend, analysis engine, SQLite persistence. |
+| `api` | `codebase-intelligence-api` | `8000` | FastAPI backend, analyzer orchestration, SQLite persistence. |
 | `web` | `codebase-intelligence-web` | `3000` | Production React build served by Nginx. |
 | `chroma` | `codebase-intelligence-chroma` | `8001` | ChromaDB sidecar for optional RAG collections. |
 
@@ -275,9 +261,9 @@ Network:
 - `GET /github/results/{job_id}` — fetch completed results.
 - `GET /github/share/{job_id}` — public/shareable result endpoint.
 - `GET /github/export/{job_id}/json` — export results as JSON.
-- `WS /ws/progress/{job_id}` — stream progress updates.
+- `WS /ws/progress/{job_id}` — stream live progress updates.
 
-Example request:
+Example:
 
 ```json
 {
@@ -289,16 +275,13 @@ Example request:
 }
 ```
 
-### Review utilities
+### Utilities
 
 - `POST /review` — review a code string.
 - `POST /review-file` — review a file path available to the backend.
 - `POST /upload-review` — upload and review a file.
 - `GET /stats` — system stats.
 - `GET /health` — health check.
-
-### Authentication
-
 - `GET /auth/github` — start GitHub OAuth flow.
 - `GET /auth/github/callback` — OAuth callback handler.
 
@@ -325,45 +308,45 @@ docker compose up --build
 
 ## Troubleshooting
 
-**API container starts, but analysis returns 503**
+**Analysis returns 503**
 
-- Set `OPENAI_API_KEY` in `.env`.
-- Recreate the API container after changing `.env`: `docker compose up --build api`.
+Set `OPENAI_API_KEY` in `.env`, then recreate the API container:
 
-**Frontend cannot reach the backend**
+```bash
+docker compose up --build api
+```
 
-- Confirm the API health check: `curl http://localhost:8000/health`.
-- Confirm `REACT_APP_API_URL=http://localhost:8000` before building the web image.
-- Rebuild the web container if the frontend API URL changes.
+**Frontend cannot reach backend**
 
-**GitHub OAuth fails with a redirect mismatch**
+```bash
+curl http://localhost:8000/health
+```
 
-- GitHub callback must exactly match `http://localhost:8000/auth/github/callback`.
-- `BACKEND_URL` should be `http://localhost:8000` for local Docker.
-- `FRONTEND_URL` should be `http://localhost:3000` for local Docker.
+Confirm `REACT_APP_API_URL=http://localhost:8000` before building the web image.
 
-**ChromaDB is unavailable**
+**GitHub OAuth redirect mismatch**
 
-- Confirm the sidecar is running: `docker compose ps chroma`.
-- Check Chroma directly: `curl http://localhost:8001/api/v1/heartbeat`.
-- If `ENABLE_RAG=false`, analysis can still run without Chroma-backed RAG.
+Use exactly:
 
-**Large repository analysis is slow**
+- `BACKEND_URL=http://localhost:8000`
+- `FRONTEND_URL=http://localhost:3000`
+- GitHub callback: `http://localhost:8000/auth/github/callback`
 
-- Keep `ANALYSIS_MODE=fast` for local runs.
-- Lower `MAX_ANALYSIS_FILES` or use a narrower `files_pattern` such as `*.py`.
-- Switch to `analysis_mode=detailed` only for focused follow-up reviews.
+**ChromaDB unavailable**
+
+```bash
+docker compose ps chroma
+curl http://localhost:8001/api/v1/heartbeat
+```
+
+If `ENABLE_RAG=false`, core analysis can still run without RAG.
+
+**Large repo is slow**
+
+Keep `ANALYSIS_MODE=fast`, lower `MAX_ANALYSIS_FILES`, or narrow `files_pattern`.
 
 ---
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
----
-
-<div align="center">
-
-[⬆ Back to Top](#codebase-intelligence)
-
-</div>
