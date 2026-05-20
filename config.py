@@ -25,3 +25,10 @@ DB_PATH = os.getenv("DB_PATH", "code_review_results.db")
 # Vector database / model settings
 VECTOR_DB_PATH = os.getenv("VECTOR_DB_PATH", "./chroma_db")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+
+# Analysis behavior
+ANALYSIS_MODE = os.getenv("ANALYSIS_MODE", "fast").lower()
+GPT_REVIEW_MODEL = os.getenv("GPT_REVIEW_MODEL", "gpt-4o-mini")
+GPT_TIMEOUT_SECONDS = int(os.getenv("GPT_TIMEOUT_SECONDS", "30"))
+MAX_ANALYSIS_FILES = int(os.getenv("MAX_ANALYSIS_FILES", "40"))
+ENABLE_RAG = os.getenv("ENABLE_RAG", "false").lower() in {"1", "true", "yes", "on"}

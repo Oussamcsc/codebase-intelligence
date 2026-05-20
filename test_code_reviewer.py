@@ -152,5 +152,53 @@ def test_get_relevant_context_empty(assistant):
     assert isinstance(context, list)
 
 
+def test_senior_filter_suppresses_low_signal_repo_noise(assistant):
+    """Fast repo review should not leak generic lint/style noise."""
+    issues = [
+        {
+            "severity": "suggestion",
+            "line": 49,
+            "file_path": "apps/api/tests/test_admin_api_keys.py",
+            "issue": "Magic number detected: 201",
+            "suggestion": "Consider defining a named constant: MEANINGFUL_NAME = 201",
+            "category": "pattern_magic_numbers",
+            "evidence": {"magic_number": 201},
+        },
+        {
+            "severity": "warning",
+            "line": 84,
+            "file_path": "apps/api/tests/test_metering_flow.py",
+            "issue": "Function \"test_api_key_metering_flow\" is 57 lines long",
+            "suggestion": "Consider breaking this function into smaller functions",
+            "category": "pattern_long_functions",
+            "evidence": {"line_count": 57},
+        },
+        {
+            "severity": "warning",
+            "line": 11,
+            "file_path": "apps/api/app/core/redis.py",
+            "issue": "Global statement found in function \"get_redis_client\": _redis_client",
+            "suggestion": "Consider passing values as parameters and returning results instead of using global variables",
+            "category": "pattern_global_assignments",
+            "evidence": {"global_variables": ["_redis_client"]},
+        },
+        {
+            "severity": "critical",
+            "line": 17,
+            "file_path": "apps/api/app/usage/routes.py",
+            "issue": "Function \"next_month_reset_date\" expects 1 arguments but 0 were provided",
+            "suggestion": "Pass the current timestamp argument or update the function signature.",
+            "category": "type_signature_mismatch",
+            "evidence": {"expected_args": 1, "provided_args": 0},
+        },
+    ]
+
+    filtered = assistant._filter_senior_engineer_issues(issues)
+
+    assert len(filtered) == 1
+    assert filtered[0]["category"] == "type_signature_mismatch"
+    assert "next_month_reset_date" in filtered[0]["issue"]
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

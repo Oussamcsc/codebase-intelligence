@@ -3,11 +3,12 @@
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+import ast
 from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, WebSocket, WebSocketDisconnect, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse # Add RedirectResponse
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Callable
 import uvicorn
 from Code_reviewer import CodeReviewer
 import json
@@ -26,14 +27,19 @@ from contextlib import contextmanager
 import secrets # Import secrets for token generation
 import httpx # Import httpx for async requests in exchange_code_for_token if needed, otherwise remove
 from config import (
+    ANALYSIS_MODE,
     API_HOST,
     API_PORT,
     DB_PATH,
     EMBEDDING_MODEL,
+    ENABLE_RAG,
     FRONTEND_REDIRECT_BASE,
     FRONTEND_URL,
     GITHUB_CLIENT_ID,
     GITHUB_CLIENT_SECRET,
+    GPT_REVIEW_MODEL,
+    GPT_TIMEOUT_SECONDS,
+    MAX_ANALYSIS_FILES,
     OPENAI_API_KEY,
     OAUTH_COOKIE_SECURE,
     REDIRECT_URI,
@@ -60,15 +66,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize comprehensive code reviewer
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY environment variable required")
+# Initialize comprehensive code reviewer lazily enough for health/config endpoints to work
+# even when a fresh clone has not configured OPENAI_API_KEY yet.
+reviewer = None
+if OPENAI_API_KEY:
+    reviewer = CodeReviewer(
+        openai_api_key=OPENAI_API_KEY,
+        embedding_model=EMBEDDING_MODEL,
+        vector_db_path=VECTOR_DB_PATH,
+        analysis_mode=ANALYSIS_MODE,
+        enable_rag=ENABLE_RAG,
+        gpt_review_model=GPT_REVIEW_MODEL,
+        gpt_timeout_seconds=GPT_TIMEOUT_SECONDS,
+    )
+else:
+    print("⚠️ OPENAI_API_KEY not configured. Health/config endpoints are available; analysis endpoints will return 503.")
 
-reviewer = CodeReviewer(
-    openai_api_key=OPENAI_API_KEY,
-    embedding_model=EMBEDDING_MODEL,
-    vector_db_path=VECTOR_DB_PATH,
-)
+
+def require_reviewer() -> CodeReviewer:
+    if reviewer is None:
+        raise HTTPException(
+            status_code=503,
+            detail="OPENAI_API_KEY is not configured. Set it in .env to enable code analysis."
+        )
+    return reviewer
 
 @contextmanager
 def get_db():
@@ -110,8 +131,14 @@ async def startup_event():
         print("🚀 Initializing Enhanced Code Review System...")
         # Initialize database
         init_database()
-        reviewer.initialize_knowledge_base()
-        print("✅ Knowledge base initialized")
+        if reviewer is None:
+            print("⚠️ Skipping analyzer startup: OPENAI_API_KEY is not configured")
+            return
+        if ENABLE_RAG:
+            reviewer.initialize_knowledge_base()
+            print("✅ Knowledge base initialized")
+        else:
+            print("⏭️ Knowledge base disabled (ENABLE_RAG=false)")
         reviewer.enable_codebase_analysis(".")
         print("✅ Codebase analysis enabled")
     except Exception as e:
@@ -151,6 +178,8 @@ class GitHubRepoRequest(BaseModel):
     repo_url: str = Field(..., description="GitHub repository URL (e.g., https://github.com/user/repo)")
     branch: str = Field(default="main", description="Branch to analyze")
     files_pattern: str = Field(default="*.py", description="File pattern to analyze")
+    max_files: int = Field(default=MAX_ANALYSIS_FILES, ge=1, le=500, description="Maximum files to analyze for latency control")
+    analysis_mode: str = Field(default=ANALYSIS_MODE, description="fast or detailed")
 
 class AnalysisJobResponse(BaseModel):
     job_id: str
@@ -211,18 +240,26 @@ async def root():
 async def health_check():
     """Health check endpoint"""
     return {
-        "status": "healthy",
+        "status": "healthy" if reviewer is not None else "degraded",
         "system": "Enhanced Modular Code Review",
         "version": "2.1.0",
+        "config": {
+            "openai_configured": bool(OPENAI_API_KEY),
+            "github_oauth_configured": bool(GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET),
+            "analysis_mode": ANALYSIS_MODE,
+            "review_model": GPT_REVIEW_MODEL,
+            "max_analysis_files": MAX_ANALYSIS_FILES,
+            "rag_enabled": ENABLE_RAG,
+        },
         "analyzers": {
-            "codebase_analyzer": "✅ Active",
-            "pattern_matcher": "✅ Active",
-            "type_analyzer": "✅ Active",
-            "duplicate_detector": "✅ Active"
+            "codebase_analyzer": "✅ Active" if reviewer else "⚠️ Disabled until OPENAI_API_KEY is set",
+            "pattern_matcher": "✅ Active" if reviewer else "⚠️ Disabled until OPENAI_API_KEY is set",
+            "type_analyzer": "✅ Active" if reviewer else "⚠️ Disabled until OPENAI_API_KEY is set",
+            "duplicate_detector": "✅ Active" if reviewer and ANALYSIS_MODE == "detailed" else "⏭️ Skipped in fast mode"
         },
         "knowledge_base": {
-            "best_practices": reviewer.best_practices.count(),
-            "common_issues": reviewer.common_issues.count()
+            "best_practices": reviewer.best_practices.count() if reviewer else 0,
+            "common_issues": reviewer.common_issues.count() if reviewer else 0
         },
         "database": "✅ Connected"
     }
@@ -230,6 +267,7 @@ async def health_check():
 @app.get("/stats")
 async def get_stats():
     """Get comprehensive system statistics"""
+    r = require_reviewer()
     with get_db() as conn:
         cursor = conn.execute("SELECT COUNT(*) as total FROM analysis_jobs")
         total_jobs = cursor.fetchone()['total']
@@ -237,14 +275,14 @@ async def get_stats():
         completed_jobs = cursor.fetchone()['completed']
     return {
         "knowledge_base": {
-            "best_practices": reviewer.best_practices.count(),
-            "common_issues": reviewer.common_issues.count()
+            "best_practices": r.best_practices.count(),
+            "common_issues": r.common_issues.count()
         },
-        "last_analysis": reviewer.last_analysis_results,
+        "last_analysis": r.last_analysis_results,
         "codebase_analysis": {
-            "enabled": reviewer.codebase_analyzer.is_analyzed,
-            "files_analyzed": len(reviewer.codebase_analyzer.all_files),
-            "functions_found": len(reviewer.codebase_analyzer.all_functions)
+            "enabled": r.codebase_analyzer.is_analyzed,
+            "files_analyzed": len(r.codebase_analyzer.all_files),
+            "functions_found": len(r.codebase_analyzer.all_functions)
         },
         "jobs": {
             "total": total_jobs,
@@ -256,7 +294,8 @@ async def get_stats():
 async def review_code(request: CodeReviewRequest):
     """Comprehensive code review with all analyzers"""
     try:
-        review = reviewer.review_code(
+        r = require_reviewer()
+        review = r.review_code(
             code=request.code,
             language=request.language,
             file_path=request.file_path,
@@ -277,7 +316,8 @@ async def review_file(request: FileReviewRequest):
             raise HTTPException(status_code=404, detail=f"File not found: {request.file_path}")
         with open(file_path, 'r', encoding='utf-8') as f:
             code = f.read()
-        review = reviewer.review_code(
+        r = require_reviewer()
+        review = r.review_code(
             code=code,
             language="python",
             file_path=request.file_path,
@@ -297,7 +337,8 @@ async def upload_and_review(file: UploadFile = File(...), context: Optional[str]
             tmp.write(code)
             tmp_path = tmp.name
         try:
-            review = reviewer.review_code(
+            r = require_reviewer()
+            review = r.review_code(
                 code=code,
                 language="python",
                 file_path=tmp_path,
@@ -313,7 +354,8 @@ async def upload_and_review(file: UploadFile = File(...), context: Optional[str]
 async def add_best_practice(request: BestPracticeRequest):
     """Add a best practice to the knowledge base"""
     try:
-        reviewer.add_best_practice(
+        r = require_reviewer()
+        r.add_best_practice(
             request.practice,
             request.category,
             request.metadata
@@ -321,7 +363,7 @@ async def add_best_practice(request: BestPracticeRequest):
         return {
             "status": "success",
             "message": "Best practice added",
-            "total_count": reviewer.best_practices.count()
+            "total_count": r.best_practices.count()
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -330,7 +372,8 @@ async def add_best_practice(request: BestPracticeRequest):
 async def add_common_issue(request: CommonIssueRequest):
     """Add a common issue to the knowledge base"""
     try:
-        reviewer.add_common_issue(
+        r = require_reviewer()
+        r.add_common_issue(
             request.issue,
             request.category,
             request.metadata
@@ -338,7 +381,7 @@ async def add_common_issue(request: CommonIssueRequest):
         return {
             "status": "success",
             "message": "Common issue added",
-            "total_count": reviewer.common_issues.count()
+            "total_count": r.common_issues.count()
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -439,15 +482,16 @@ async def get_pull_requests(owner: str, repo: str, access_token: str):
 @app.get("/analysis-results")
 async def get_last_analysis():
     """Get detailed breakdown of last analysis"""
+    r = require_reviewer()
     return {
         "status": "success",
-        "last_analysis": reviewer.last_analysis_results,
+        "last_analysis": r.last_analysis_results,
         "analysis_details": {
-            "codebase_issues": len(reviewer.last_analysis_results.get('codebase_issues', [])),
-            "pattern_issues": len(reviewer.last_analysis_results.get('pattern_issues', [])),
-            "type_issues": len(reviewer.last_analysis_results.get('type_issues', [])),
-            "duplicate_issues": len(reviewer.last_analysis_results.get('duplicate_issues', [])),
-            "total_verified": reviewer.last_analysis_results.get('total_issues', 0)
+            "codebase_issues": len(r.last_analysis_results.get('codebase_issues', [])),
+            "pattern_issues": len(r.last_analysis_results.get('pattern_issues', [])),
+            "type_issues": len(r.last_analysis_results.get('type_issues', [])),
+            "duplicate_issues": len(r.last_analysis_results.get('duplicate_issues', [])),
+            "total_verified": r.last_analysis_results.get('total_issues', 0)
         }
     }
 
@@ -455,15 +499,16 @@ async def get_last_analysis():
 @app.get("/codebase-info")
 async def get_codebase_info():
     """Get information about the analyzed codebase"""
-    if not reviewer.codebase_analyzer.is_analyzed:
+    r = require_reviewer()
+    if not r.codebase_analyzer.is_analyzed:
         raise HTTPException(status_code=404, detail="Codebase not analyzed. Run analysis first.")
 
     return {
         "analyzed": True,
-        "files": len(reviewer.codebase_analyzer.all_files),
-        "functions": len(reviewer.codebase_analyzer.all_functions),
-        "dependencies": len(reviewer.codebase_analyzer.dependency_graph),
-        "sample_files": list(reviewer.codebase_analyzer.all_files.keys())[:10]
+        "files": len(r.codebase_analyzer.all_files),
+        "functions": len(r.codebase_analyzer.all_functions),
+        "dependencies": len(r.codebase_analyzer.dependency_graph),
+        "sample_files": list(r.codebase_analyzer.all_files.keys())[:10]
     }
 
 
@@ -471,9 +516,10 @@ async def get_codebase_info():
 async def analyze_function_impact(function_name: str, file_path: str = None):
     """Get detailed impact analysis for a specific function"""
     try:
+        r = require_reviewer()
         if not file_path:
             matching_functions = []
-            for func_key in reviewer.codebase_analyzer.all_functions.keys():
+            for func_key in r.codebase_analyzer.all_functions.keys():
                 if function_name in func_key:
                     matching_functions.append(func_key)
 
@@ -490,8 +536,8 @@ async def analyze_function_impact(function_name: str, file_path: str = None):
         else:
             func_key = f"{file_path}::{function_name}"
 
-        impact_analysis = reviewer.codebase_analyzer.get_function_impact_chain(func_key)
-        dependency_analysis = reviewer.codebase_analyzer.analyze_function_dependencies(func_key)
+        impact_analysis = r.codebase_analyzer.get_function_impact_chain(func_key)
+        dependency_analysis = r.codebase_analyzer.analyze_function_dependencies(func_key)
 
         return {
             "function": function_name,
@@ -588,7 +634,147 @@ def update_job_status(job_id: str, **kwargs):
     print(f"✅ Job {job_id} updated: {kwargs}")
 
 
-async def analyze_github_repo_background(job_id: str, repo_url: str, branch: str, files_pattern: str):
+
+def _repo_relative_path(file_path: Path, repo_dir: str) -> str:
+    try:
+        resolved_file = Path(os.path.realpath(file_path))
+        resolved_repo = Path(os.path.realpath(repo_dir))
+        return str(resolved_file.relative_to(resolved_repo))
+    except ValueError:
+        return str(file_path.relative_to(repo_dir)) if str(file_path).startswith(str(repo_dir)) else file_path.name
+
+
+def _collect_fast_repository_evidence(
+    analysis_reviewer: CodeReviewer,
+    repo_dir: str,
+    matching_files: List[Path],
+    repo_url: str,
+    branch: str,
+    discovered_files: int,
+    max_files: int,
+    progress_callback: Optional[Callable[[int, int, str], None]] = None,
+    stage_callback: Optional[Callable[[int, str], None]] = None,
+) -> Dict[str, Any]:
+    """Run deterministic/static analyzers across the repo, then one repo-level LLM pass."""
+    telemetry = {
+        "timings_ms": {},
+        "strategy": "single repository-level LLM call after static evidence collection",
+    }
+    evidence_scan_start = time.perf_counter()
+    all_issues = []
+    file_summaries = []
+    successful_files = 0
+    failed_files = 0
+
+    for i, file_path in enumerate(matching_files):
+        try:
+            absolute_file_path = file_path.resolve()
+            rel_path = _repo_relative_path(file_path, repo_dir)
+            if progress_callback:
+                progress_callback(i + 1, len(matching_files), rel_path)
+            with open(absolute_file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                code = f.read()
+
+            structure = analysis_reviewer._analyze_code_structure(code)
+            file_summaries.append({
+                "file_path": rel_path,
+                "lines": structure.get("lines", len(code.splitlines())),
+                "functions": [item.get("name") for item in structure.get("functions", [])[:20]],
+                "classes": [item.get("name") for item in structure.get("classes", [])[:20]],
+                "imports_count": len(structure.get("imports", [])),
+            })
+
+            try:
+                codebase_issues = analysis_reviewer.codebase_analyzer.analyze_file(str(absolute_file_path))
+                all_issues.extend(analysis_reviewer._convert_codebase_issues(codebase_issues, code, rel_path))
+            except Exception as e:
+                print(f"⚠️ Codebase evidence failed for {rel_path}: {e}")
+
+            try:
+                tree = ast.parse(code)
+                pattern_issues = analysis_reviewer.pattern_matcher.find_antipatterns(tree, rel_path, code)
+                all_issues.extend(analysis_reviewer._convert_pattern_issues(pattern_issues, code, rel_path))
+            except Exception as e:
+                print(f"⚠️ Pattern evidence failed for {rel_path}: {e}")
+
+            successful_files += 1
+        except Exception as e:
+            failed_files += 1
+            print(f"❌ Evidence collection failed for {file_path.name}: {e}")
+
+    telemetry["timings_ms"]["evidence_scan"] = round((time.perf_counter() - evidence_scan_start) * 1000)
+
+    if stage_callback:
+        stage_callback(76, "Running repository type analysis...")
+    type_analysis_start = time.perf_counter()
+    try:
+        previous_cwd = os.getcwd()
+        os.chdir(repo_dir)
+        try:
+            type_issues = analysis_reviewer.type_analyzer.analyze_types(
+                analysis_reviewer.codebase_analyzer.all_functions,
+                analysis_reviewer.codebase_analyzer.all_files,
+                target_file=None,
+            )
+        finally:
+            os.chdir(previous_cwd)
+        for issue in type_issues[:100]:
+            issue_file = getattr(issue, "file_path", None) or "repository"
+            all_issues.extend(analysis_reviewer._convert_type_issues([issue], "", issue_file))
+    except Exception as e:
+        print(f"⚠️ Repository type evidence failed: {e}")
+    telemetry["timings_ms"]["type_analysis"] = round((time.perf_counter() - type_analysis_start) * 1000)
+
+    if stage_callback:
+        stage_callback(80, "Prioritizing high-signal findings...")
+    filtering_start = time.perf_counter()
+    high_impact_issues = analysis_reviewer._filter_senior_engineer_issues(all_issues)
+    telemetry["timings_ms"]["issue_filtering"] = round((time.perf_counter() - filtering_start) * 1000)
+    metadata = {
+        "files_discovered": discovered_files,
+        "files_analyzed": successful_files,
+        "files_failed": failed_files,
+        "files_capped_at": max_files,
+        "functions_found": len(analysis_reviewer.codebase_analyzer.all_functions),
+        "parsed_files": len(analysis_reviewer.codebase_analyzer.all_files),
+        "raw_static_issues": len(all_issues),
+        "high_impact_issues": len(high_impact_issues),
+        "latency_strategy": "single repository-level LLM call after static evidence collection",
+        "telemetry": telemetry,
+    }
+
+    if stage_callback:
+        stage_callback(85, "Synthesizing repository-level review with LLM...")
+    llm_review_start = time.perf_counter()
+    review = analysis_reviewer.review_repository_evidence(
+        repo_url=repo_url,
+        branch=branch,
+        file_summaries=file_summaries,
+        issues=high_impact_issues,
+        metadata=metadata,
+    )
+    telemetry["timings_ms"]["llm_review"] = round((time.perf_counter() - llm_review_start) * 1000)
+    telemetry["timings_ms"]["fast_repository_total"] = sum(telemetry["timings_ms"].values())
+    review.setdefault("metadata", metadata)
+    review["metadata"]["telemetry"] = telemetry
+
+    return {
+        "repository": repo_url,
+        "branch": branch,
+        "files_analyzed": successful_files,
+        "total_files_discovered": discovered_files,
+        "total_files_attempted": len(matching_files),
+        "analysis_mode": "fast",
+        "max_files": max_files,
+        "files_failed": failed_files,
+        "total_issues": len(review.get("issues", [])),
+        "repository_review": review,
+        "telemetry": telemetry,
+        "results": [{"file_path": "repository", "review": review}],
+    }
+
+
+async def analyze_github_repo_background(job_id: str, repo_url: str, branch: str, files_pattern: str, max_files: int, analysis_mode: str):
     """Background task to analyze GitHub repository with REAL progress tracking"""
     print(f"\n{'=' * 80}")
     print(f"🚀 STARTING ANALYSIS JOB: {job_id}")
@@ -596,47 +782,65 @@ async def analyze_github_repo_background(job_id: str, repo_url: str, branch: str
 
     repo_dir = None
     analysis_reviewer = None
+    job_start = time.perf_counter()
+    telemetry = {"timings_ms": {}}
 
     try:
         # Stage 1: Cloning (0-15%)
         update_job_status(job_id, status="running", progress=5, current_task="Cloning repository...")
-        await asyncio.sleep(0.5)  # Let frontend see this update
 
+        clone_start = time.perf_counter()
         repo_dir = clone_github_repo(repo_url, branch)
+        telemetry["timings_ms"]["clone"] = round((time.perf_counter() - clone_start) * 1000)
         print(f"✅ Repo cloned to: {repo_dir}")
 
         # Stage 2: Scanning (15-25%)
         update_job_status(job_id, progress=15, current_task="Scanning files...")
-        await asyncio.sleep(0.3)
 
+        scan_start = time.perf_counter()
+        ignored_parts = {".git", "__pycache__", ".venv", "venv", "env", "node_modules", "dist", "build", ".next"}
         matching_files = []
         for pattern in files_pattern.split(","):
             pattern = pattern.strip()
             for file_path in Path(repo_dir).rglob(pattern):
-                if file_path.is_file() and file_path.stat().st_size < 1024 * 1024:
-                    matching_files.append(file_path)
+                if not file_path.is_file():
+                    continue
+                if any(part in ignored_parts for part in file_path.parts):
+                    continue
+                if file_path.stat().st_size >= 1024 * 1024:
+                    continue
+                matching_files.append(file_path)
 
-        print(f"📁 Found {len(matching_files)} files")
+        matching_files = sorted(set(matching_files), key=lambda path: (len(path.parts), str(path)))
+        discovered_files = len(matching_files)
+        if len(matching_files) > max_files:
+            matching_files = matching_files[:max_files]
+        telemetry["timings_ms"]["file_discovery"] = round((time.perf_counter() - scan_start) * 1000)
+
+        print(f"📁 Found {discovered_files} files; analyzing {len(matching_files)}")
         update_job_status(
             job_id,
             progress=25,
-            current_task=f"Found {len(matching_files)} files",
+            current_task=f"Found {discovered_files} files; analyzing {len(matching_files)}",
             total_files=len(matching_files)
         )
-        await asyncio.sleep(0.3)
 
         # Stage 3: Building graph (25-35%)
-        is_large_repo = len(matching_files) > 100
+        is_large_repo = len(matching_files) > 100 or analysis_mode.lower() == "fast"
         update_job_status(job_id, progress=30, current_task="Building codebase graph...")
-        await asyncio.sleep(0.3)
 
         analysis_reviewer = CodeReviewer(
             openai_api_key=OPENAI_API_KEY,
             embedding_model=EMBEDDING_MODEL,
             vector_db_path=VECTOR_DB_PATH,
-            skip_duplicate_detection=is_large_repo
+            skip_duplicate_detection=is_large_repo,
+            analysis_mode=analysis_mode,
+            enable_rag=ENABLE_RAG and analysis_mode.lower() == "detailed",
+            gpt_review_model=GPT_REVIEW_MODEL,
+            gpt_timeout_seconds=GPT_TIMEOUT_SECONDS,
         )
 
+        graph_start = time.perf_counter()
         try:
             # CRITICAL FIX: Pass repo_dir to enable_codebase_analysis
             print(f"🔧 Building codebase graph for: {repo_dir}")
@@ -644,9 +848,57 @@ async def analyze_github_repo_background(job_id: str, repo_url: str, branch: str
             print("✅ Codebase graph built")
         except Exception as e:
             print(f"⚠️ Graph build warning: {e}")
+        telemetry["timings_ms"]["codebase_graph"] = round((time.perf_counter() - graph_start) * 1000)
+
+        update_job_status(job_id, progress=35, current_task="Starting repository-level evidence scan...")
+
+        if analysis_mode.lower() == "fast":
+            def fast_progress(current: int, total: int, rel_path: str) -> None:
+                progress = 35 + int(current / max(total, 1) * 40)
+                update_job_status(
+                    job_id,
+                    progress=progress,
+                    files_analyzed=current,
+                    current_task=f"Collecting evidence from {rel_path} ({current}/{total})"
+                )
+
+            def fast_stage(progress: int, task: str) -> None:
+                update_job_status(job_id, progress=progress, current_task=task)
+
+            results = _collect_fast_repository_evidence(
+                analysis_reviewer=analysis_reviewer,
+                repo_dir=repo_dir,
+                matching_files=matching_files,
+                repo_url=repo_url,
+                branch=branch,
+                discovered_files=discovered_files,
+                max_files=max_files,
+                progress_callback=fast_progress,
+                stage_callback=fast_stage,
+            )
+            results.setdefault("telemetry", {}).setdefault("timings_ms", {})
+            results["telemetry"]["timings_ms"] = {**telemetry["timings_ms"], **results["telemetry"]["timings_ms"]}
+            results["telemetry"]["timings_ms"]["job_total"] = round((time.perf_counter() - job_start) * 1000)
+            if "repository_review" in results:
+                results["repository_review"].setdefault("metadata", {})["telemetry"] = results["telemetry"]
+            update_job_status(
+                job_id,
+                status="completed",
+                progress=100,
+                files_analyzed=results["files_analyzed"],
+                current_task=f"Complete! Repository-level review analyzed {results['files_analyzed']}/{len(matching_files)} files",
+                results_json=results
+            )
+            print(f"\n🏁 COMPLETE: repository-level fast review, {results['files_analyzed']}/{len(matching_files)} files")
+            if repo_dir and os.path.exists(repo_dir):
+                shutil.rmtree(repo_dir, ignore_errors=True)
+                print(f"🧹 Cleaned up: {repo_dir}")
+            if analysis_reviewer:
+                del analysis_reviewer
+            gc.collect()
+            return
 
         update_job_status(job_id, progress=35, current_task="Starting file analysis...")
-        await asyncio.sleep(0.3)
 
         # Stage 4: Analyze files (35-95%)
         all_results = []
@@ -683,9 +935,6 @@ async def analyze_github_repo_background(job_id: str, repo_url: str, branch: str
 
                 print(f"\n📄 [{i + 1}/{len(matching_files)}] Analyzing: {rel_path}")
 
-                # Add small delay so progress is visible
-                await asyncio.sleep(0.2)
-
                 # CRITICAL FIX: Pass ABSOLUTE file path to review_code
                 # This ensures codebase analyzer can find the file
                 review = analysis_reviewer.review_code(
@@ -713,17 +962,22 @@ async def analyze_github_repo_background(job_id: str, repo_url: str, branch: str
 
         # Stage 5: Finalizing (95-100%)
         update_job_status(job_id, progress=95, current_task="Finalizing results...")
-        await asyncio.sleep(0.5)
 
         total_issues = sum(len(r["review"].get("issues", [])) for r in all_results)
+
+        telemetry["timings_ms"]["job_total"] = round((time.perf_counter() - job_start) * 1000)
 
         results = {
             "repository": repo_url,
             "branch": branch,
             "files_analyzed": successful_files,
+            "total_files_discovered": discovered_files,
             "total_files_attempted": len(matching_files),
+            "analysis_mode": analysis_mode,
+            "max_files": max_files,
             "files_failed": failed_files,
             "total_issues": total_issues,
+            "telemetry": telemetry,
             "results": all_results
         }
 
@@ -790,7 +1044,9 @@ async def analyze_github_repo(request: GitHubRepoRequest, background_tasks: Back
             job_id,
             request.repo_url,
             request.branch,
-            request.files_pattern
+            request.files_pattern,
+            request.max_files,
+            request.analysis_mode
         )
 
         # Generate shareable URL using environment variable or default

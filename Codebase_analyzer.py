@@ -181,6 +181,7 @@ class CodebaseAnalyzer:
                         self.all_functions[f"{relative_path}::{func_key}"] = method_info
 
         self.all_files[relative_path] = file_info
+        return file_info
 
     def _extract_function_info(
             self,

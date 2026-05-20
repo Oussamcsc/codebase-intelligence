@@ -81,10 +81,18 @@ class CodeReviewer:
             duplicate_detector: Optional[DuplicateDetector] = None,
             embedding_model: str = "text-embedding-3-small",
             vector_db_path: str = "./chroma_db",
-            skip_duplicate_detection: bool = False
+            skip_duplicate_detection: bool = False,
+            analysis_mode: str = "fast",
+            enable_rag: bool = True,
+            gpt_review_model: str = "gpt-4o-mini",
+            gpt_timeout_seconds: int = 30
     ):
         """Initialize reviewer with all analyzers (ChromaDB with OpenAI embeddings)"""
         self.client = OpenAI(api_key=openai_api_key)
+        self.analysis_mode = analysis_mode.lower()
+        self.enable_rag = enable_rag
+        self.gpt_review_model = gpt_review_model
+        self.gpt_timeout_seconds = gpt_timeout_seconds
 
         # Initialize all analyzers
         self.codebase_analyzer = analyzer or CodebaseAnalyzer()
@@ -96,31 +104,35 @@ class CodeReviewer:
         # Store embedding model name for OpenAI API
         self.embedding_model_name = embedding_model
 
-        # Try to initialize ChromaDB with OpenAI embeddings
+        # Try to initialize ChromaDB with OpenAI embeddings only when RAG is enabled.
+        # Fast mode keeps startup and per-file analysis latency low by default.
         self.chroma_available = False
-        try:
-            import chromadb
-
-            self.chroma_client = chromadb.PersistentClient(path=vector_db_path)
-
+        if self.enable_rag:
             try:
-                self.best_practices = self.chroma_client.get_collection("best_practices")
-            except:
-                self.best_practices = self.chroma_client.create_collection("best_practices")
+                import chromadb
 
-            try:
-                self.common_issues = self.chroma_client.get_collection("common_issues")
-            except:
-                self.common_issues = self.chroma_client.create_collection("common_issues")
+                self.chroma_client = chromadb.PersistentClient(path=vector_db_path)
 
-            self.chroma_available = True
-            print("✅ ChromaDB initialized with OpenAI embeddings")
+                try:
+                    self.best_practices = self.chroma_client.get_collection("best_practices")
+                except:
+                    self.best_practices = self.chroma_client.create_collection("best_practices")
 
-        except (ImportError, Exception) as e:
-            print(f"⚠️  ChromaDB not available: {e}")
-            print("⚠️  Running without knowledge base (core analysis still works)")
+                try:
+                    self.common_issues = self.chroma_client.get_collection("common_issues")
+                except:
+                    self.common_issues = self.chroma_client.create_collection("common_issues")
 
-            # Create dummy collections so code doesn't break
+                self.chroma_available = True
+                print("✅ ChromaDB initialized with OpenAI embeddings")
+
+            except (ImportError, Exception) as e:
+                print(f"⚠️  ChromaDB not available: {e}")
+                print("⚠️  Running without knowledge base (core analysis still works)")
+                self.best_practices = DummyCollection()
+                self.common_issues = DummyCollection()
+                self.chroma_client = None
+        else:
             self.best_practices = DummyCollection()
             self.common_issues = DummyCollection()
             self.chroma_client = None
@@ -168,10 +180,21 @@ class CodeReviewer:
         """
         print(f"\n🔍 Starting comprehensive code review...")
 
-        # NEW STEP 0: Code Understanding Phase (what does this code do?)
-        print("🧠 Phase 1: Understanding what the code does...")
-        code_understanding = self._understand_code_purpose(code, file_path)
-        print(f"✅ Code purpose understood: {code_understanding.get('summary', 'N/A')[:100]}...")
+        # Code understanding is expensive. In fast mode, use a local AST summary and let
+        # the final review prompt handle purpose once instead of making a second LLM call.
+        if self.analysis_mode == "detailed":
+            print("🧠 Phase 1: Understanding what the code does...")
+            code_understanding = self._understand_code_purpose(code, file_path)
+            print(f"✅ Code purpose understood: {code_understanding.get('summary', 'N/A')[:100]}...")
+        else:
+            structure_preview = self._analyze_code_structure(code)
+            code_understanding = {
+                "summary": f"Fast local summary for {file_path or 'uploaded code'}",
+                "main_purpose": "Skipped separate LLM understanding pass in fast mode to reduce latency.",
+                "key_components": structure_preview.get("functions", [])[:10] + structure_preview.get("classes", [])[:10],
+                "critical_flows": [],
+                "dependencies": structure_preview.get("imports", [])[:20],
+            }
 
         all_issues = []
 
@@ -221,7 +244,9 @@ class CodeReviewer:
 
         # Step 4: Duplicate detection
         duplicate_issues = []
-        if self.codebase_analyzer.is_analyzed and not self.skip_duplicate_detection:
+        if self.analysis_mode == "fast":
+            print("⏭️ Skipping duplicate detection in fast mode")
+        elif self.codebase_analyzer.is_analyzed and not self.skip_duplicate_detection:
             print("🔄 Running duplicate code detection...")
             try:
                 duplicate_issues = self.duplicate_detector.analyze_duplicates(
@@ -236,9 +261,12 @@ class CodeReviewer:
             print("⏭️ Skipping duplicate detection for large repository")
 
         # Step 5: Get RAG context
-        print("📚 Retrieving RAG context...")
-        rag_context = self._get_rag_context(code)
-        print(f"✅ Retrieved {len(rag_context)} relevant items from knowledge base")
+        if self.enable_rag:
+            print("📚 Retrieving RAG context...")
+            rag_context = self._get_rag_context(code)
+            print(f"✅ Retrieved {len(rag_context)} relevant items from knowledge base")
+        else:
+            rag_context = []
 
         # Step 6: Analyze code structure
         structure_analysis = self._analyze_code_structure(code)
@@ -369,6 +397,7 @@ Keep it concise - this is just for context before the real analysis."""
                 "suggestion": issue.suggestion,
                 "category": issue.category,
                 "source": "codebase_analyzer",
+                "file_path": file_path,
                 "evidence": issue.evidence,
                 "code_snippet": code_snippet  # NEW: actual code
             })
@@ -386,6 +415,7 @@ Keep it concise - this is just for context before the real analysis."""
                 "suggestion": issue.suggestion,
                 "category": f"pattern_{issue.rule_id}",
                 "source": "pattern_matcher",
+                "file_path": file_path,
                 "evidence": issue.evidence,
                 "code_snippet": code_snippet  # NEW: actual code
             })
@@ -403,6 +433,7 @@ Keep it concise - this is just for context before the real analysis."""
                 "suggestion": issue.suggestion,
                 "category": f"type_{issue.rule_id}",
                 "source": "type_analyzer",
+                "file_path": file_path,
                 "evidence": issue.evidence,
                 "code_snippet": code_snippet  # NEW: actual code
             })
@@ -420,10 +451,63 @@ Keep it concise - this is just for context before the real analysis."""
                 "suggestion": issue.suggestion,
                 "category": f"duplicate_{issue.rule_id}",
                 "source": "duplicate_detector",
+                "file_path": file_path,
                 "evidence": issue.evidence,
                 "code_snippet": code_snippet  # NEW: actual code
             })
         return converted
+
+    def _is_low_signal_repo_issue(self, issue: Dict) -> bool:
+        """Suppress findings that repeatedly create noisy/sloppy repository reviews."""
+        category = issue.get('category', 'unknown')
+        message = str(issue.get('issue', '')).lower()
+        suggestion = str(issue.get('suggestion', '')).lower()
+        file_path = str(issue.get('file_path', '')).lower()
+        evidence = issue.get('evidence', {}) or {}
+
+        # Normal status codes, retry counts, small sizes, and test assertions should not
+        # become portfolio-killing "magic number" advice.
+        if category == 'pattern_magic_numbers':
+            return True
+
+        # Long tests are not a production repo-level issue. Long application functions
+        # only matter when they are truly large enough to create operational risk.
+        if category == 'pattern_long_functions':
+            line_count = evidence.get('line_count', 0) or 0
+            if '/test' in file_path or 'tests/' in file_path or file_path.startswith('test_'):
+                return True
+            if line_count < 120:
+                return True
+
+        # A bare global statement is usually generic maintainability advice. Keep it out
+        # unless another analyzer ties it to a concrete correctness/concurrency issue.
+        if category == 'pattern_global_assignments':
+            return True
+
+        # Type hints, unused imports, parameter count, and broad readability categories
+        # are useful for lint reports, not high-signal AI repo review.
+        if category in {
+            'type_missing_type_hints',
+            'unused_import',
+            'pattern_long_parameter_list',
+            'readability',
+        }:
+            return True
+
+        low_signal_phrases = (
+            'magic number',
+            'add docstring',
+            'missing docstring',
+            'too many lines',
+            'is too long',
+            'makes unit testing difficult',
+            'improves readability',
+            'code clarity',
+        )
+        if any(phrase in message or phrase in suggestion for phrase in low_signal_phrases):
+            return True
+
+        return False
 
     def _filter_senior_engineer_issues(self, all_issues: List[Dict]) -> List[Dict]:
         """
@@ -474,6 +558,9 @@ Keep it concise - this is just for context before the real analysis."""
         scored_issues = []
 
         for issue in all_issues:
+            if self._is_low_signal_repo_issue(issue):
+                continue
+
             category = issue.get('category', 'unknown')
             severity = issue.get('severity', 'suggestion')
             evidence = issue.get('evidence', {})
@@ -724,10 +811,10 @@ CRITICAL REQUIREMENTS:
                 raise TimeoutError("GPT API call timed out")
 
             signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(45)  # 45 second timeout for comprehensive analysis
+            signal.alarm(self.gpt_timeout_seconds)
 
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model=self.gpt_review_model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=5000,
                 temperature=0
@@ -811,6 +898,110 @@ CRITICAL REQUIREMENTS:
             return analysis
         except:
             return {"error": "Could not parse code"}
+
+
+    def review_repository_evidence(
+            self,
+            repo_url: str,
+            branch: str,
+            file_summaries: List[Dict],
+            issues: List[Dict],
+            metadata: Dict
+    ) -> Dict:
+        """
+        Fast repository-level review: static analyzers collect evidence first, then
+        one constrained LLM call prioritizes the repo's highest-signal risks.
+        """
+        prompt = f"""You are a senior software engineer reviewing an entire repository.
+
+REPOSITORY: {repo_url}
+BRANCH: {branch}
+
+ANALYSIS METADATA:
+{json.dumps(metadata, indent=2)}
+
+FILE SUMMARIES:
+{json.dumps(file_summaries[:80], indent=2)}
+
+STATIC ANALYZER EVIDENCE, ALREADY FILTERED FOR SIGNAL:
+{json.dumps(issues[:50], indent=2)}
+
+Your job is to produce a concise, high-signal repository review. Do not invent issues.
+Use only the evidence provided. Suppress style nitpicks, generic docstring advice,
+magic-number complaints for normal constants/status codes, test-only maintainability nits,
+long-test complaints, generic global-variable complaints, and vague "add tests/logging"
+advice unless there is concrete production runtime, security, data-loss, or scalability risk.
+
+Return strict JSON:
+{{
+  "code_purpose": {{
+    "summary": "1-2 sentence repo summary",
+    "key_functionality": ["main capability", "main capability"]
+  }},
+  "overall_quality": "1-10",
+  "quality_summary": "short executive assessment",
+  "critical_findings": {{
+    "correctness_issues": 0,
+    "stability_risks": 0,
+    "performance_problems": 0,
+    "maintainability_debt": 0
+  }},
+  "issues": [
+    {{
+      "severity": "Critical|Warning|Suggestion",
+      "location": "file_path:line from evidence, or component",
+      "problematic_code": "evidence snippet if available",
+      "bug_risk": "what can go wrong",
+      "impact": "High|Medium|Low - concrete impact",
+      "fixed_code": "concrete fix or configuration change",
+      "explanation": "why this fix matters"
+    }}
+  ],
+  "strengths": ["specific strength"],
+  "architectural_recommendations": ["prioritized recommendation"],
+  "immediate_actions": ["highest ROI next action"]
+}}
+
+Limit to the 10 most important issues. If only low-signal evidence remains, return fewer issues instead of padding. Fixes must be specific enough for an engineer to implement; do not say only "ensure this is correct"."""
+
+        try:
+            import signal
+
+            def timeout_handler(signum, frame):
+                raise TimeoutError("Repository GPT review timed out")
+
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(self.gpt_timeout_seconds)
+
+            response = self.client.chat.completions.create(
+                model=self.gpt_review_model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=3500,
+                temperature=0
+            )
+
+            signal.alarm(0)
+            response_text = response.choices[0].message.content.strip()
+            response_text = re.sub(r'```(?:json|python)?', '', response_text).strip()
+            review_data = json.loads(response_text)
+        except Exception as e:
+            review_data = {
+                "code_purpose": {"summary": "Repository review unavailable", "key_functionality": []},
+                "overall_quality": "N/A",
+                "quality_summary": f"Repository-level GPT analysis failed: {str(e)}",
+                "critical_findings": {},
+                "issues": issues[:10],
+                "strengths": [],
+                "architectural_recommendations": [],
+                "immediate_actions": [],
+                "error": str(e)
+            }
+
+        review_data["analysis_mode"] = "fast_repository"
+        review_data["metadata"] = metadata
+        review_data["total_verified_issues"] = len(issues)
+        review_data["file_summaries"] = file_summaries
+        return review_data
 
     # ==================== RAG MANAGEMENT ====================
 
